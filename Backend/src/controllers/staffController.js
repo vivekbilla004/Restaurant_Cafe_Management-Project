@@ -64,5 +64,32 @@ const getStaffList = async (req, res) => {
 
   res.json(staffWithStats);
 };
+const processPayroll = async (req, res) => {
+  const { month, year } = req.body; 
+  const staff = await Staff.findOne({ _id: req.params.id, restaurantId: req.user.restaurantId });
 
-module.exports = { addStaff, markAttendance, getStaffList };
+  if (!staff) return res.status(404).json({ message: 'Staff not found' });
+
+  // 1. Calculate Attendance for the specific month
+  const daysPresent = staff.attendance.filter(a => {
+    const d = new Date(a.date);
+    return a.status === 'Present' && d.getMonth() === month - 1 && d.getFullYear() === year;
+  }).length;
+
+  // 2. Calculate Pro-Rata Salary
+  const finalPayout = Math.round((staff.salary / 30) * daysPresent);
+
+  // 3. LOOPHOLE CLOSED: Auto-Generate the Expense Record
+  const expense = await Expense.create({
+    restaurantId: req.user.restaurantId,
+    title: `Salary: ${staff.name} (${month}/${year})`,
+    amount: finalPayout,
+    category: 'Salary',
+    date: new Date(),
+    createdBy: req.user._id // The owner processing the payroll
+  });
+
+  res.json({ message: 'Payroll processed and expense recorded', payout: finalPayout, expense });
+};
+
+module.exports = { addStaff, markAttendance, getStaffList, processPayroll };

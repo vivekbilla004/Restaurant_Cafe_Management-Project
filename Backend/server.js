@@ -9,6 +9,9 @@ const restaurantRoutes = require('./src/routes/restaurantRoutes');
 const menuRoutes = require('./src/routes/menuRoutes');
 const tableRoutes = require('./src/routes/tableRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
+const inventoryRoutes = require('./src/routes/inventoryRoutes');
+const expenseRoutes = require('./src/routes/expenseRoutes');
+const reportRoutes = require('./src/routes/reportRoutes');
 
 
 // Load env vars
@@ -29,6 +32,9 @@ app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/tables', tableRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Basic Error Handling Middleware (Catches unhandled route errors)
 app.use((err, req, res, next) => {

@@ -9,7 +9,9 @@ const expenseSchema = new mongoose.Schema({
     enum: ['Rent', 'Salary', 'Purchase', 'Utility', 'Marketing', 'Other'], // Expanded for better reporting [cite: 149, 153]
     required: true 
   },
-  date: { type: Date, required: true, default: Date.now } //[cite: 150, 154]
+  date: { type: Date, required: true, default: Date.now } , //[cite: 150, 154]
+  // LOOPHOLE CLOSED: Audit trail for financial accountability
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }, { timestamps: true }); //[cite: 151, 155]
 
 // Indexing date speeds up the Monthly Profit & Loss queries significantly

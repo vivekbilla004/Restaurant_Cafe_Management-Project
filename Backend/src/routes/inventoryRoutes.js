@@ -3,12 +3,10 @@ const router = express.Router();
 const {
   addStock,
   getInventory,
+  addRecipe,
+  getRecipes,
 } = require("../controllers/inventoryController");
 // Assuming you create a quick recipeController with standard CRUD operations
-const {
-  addRecipeMapping,
-  getRecipesForMenuItem,
-} = require("../controllers/recipeController");
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 // --- INVENTORY ROUTES ---
@@ -18,17 +16,10 @@ router
   .get(protect, authorize("Owner", "Manager", "Kitchen"), getInventory) // Kitchen needs to see stock
   .post(protect, authorize("Owner", "Manager"), addStock);
 
-// --- RECIPE MAPPING ROUTES ---
-// Linking Raw Materials to Menu Items
+// Recipe mapping APIs
 router
   .route("/recipes")
-  .post(protect, authorize("Owner", "Manager"), addRecipeMapping);
-
-router.get(
-  "/recipes/:menuItemId",
-  protect,
-  authorize("Owner", "Manager", "Kitchen"),
-  getRecipesForMenuItem,
-);
+  .get(protect, authorize("Owner", "Manager", "Kitchen"), getRecipes)
+  .post(protect, authorize("Owner", "Manager"), addRecipe);
 
 module.exports = router;

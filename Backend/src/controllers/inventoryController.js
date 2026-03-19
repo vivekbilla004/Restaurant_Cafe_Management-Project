@@ -83,4 +83,43 @@ const deductInventoryForOrder = async (orderId, restaurantId) => {
   }
 };
 
-module.exports = { addStock, getInventory, deductInventoryForOrder };
+// @desc    Add or Update recipe mapping between menu item and inventory
+// @route   POST /api/inventory/recipes
+// @access  Private (Owner/Manager)
+const addRecipe = async (req, res) => {
+  const { menuItemId, inventoryId, requiredQty } = req.body;
+
+  if (!menuItemId || !inventoryId || requiredQty == null) {
+    return res.status(400).json({ message: 'menuItemId, inventoryId and requiredQty are required.' });
+  }
+
+  const existing = await Recipe.findOne({ menuItemId, inventoryId, restaurantId: req.user.restaurantId });
+  if (existing) {
+    if (!existing.isActive) {
+      existing.isActive = true;
+      existing.requiredQty = requiredQty;
+      await existing.save();
+      return res.status(200).json(existing);
+    }
+    return res.status(409).json({ message: 'This recipe mapping already exists. Use update endpoint if needed.' });
+  }
+
+  const recipe = await Recipe.create({
+    restaurantId: req.user.restaurantId,
+    menuItemId,
+    inventoryId,
+    requiredQty
+  });
+
+  res.status(201).json(recipe);
+};
+
+// @desc    Get all recipe mappings for the restaurant
+// @route   GET /api/inventory/recipes
+// @access  Private (Owner/Manager, Kitchen)
+const getRecipes = async (req, res) => {
+  const recipes = await Recipe.find({ restaurantId: req.user.restaurantId }).populate('menuItemId', 'name').populate('inventoryId', 'name');
+  res.json(recipes);
+};
+
+module.exports = { addStock, getInventory, addRecipe, getRecipes, deductInventoryForOrder };
