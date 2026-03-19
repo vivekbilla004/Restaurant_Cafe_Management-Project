@@ -1,12 +1,14 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  // FIX 1: Removed '/api' from the end of the baseURL
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/',
 });
 
 // Request Interceptor: Attach Token
 api.interceptors.request.use(
   (config) => {
+    // Make sure your Login.jsx is actually saving the token with this exact key!
     const token = localStorage.getItem('omicra_token');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
@@ -20,7 +22,6 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // FIX: Only force redirect if they are NOT already on the login page
     if (error.response && error.response.status === 401) {
       if (window.location.pathname !== '/login') {
         localStorage.removeItem('omicra_token');

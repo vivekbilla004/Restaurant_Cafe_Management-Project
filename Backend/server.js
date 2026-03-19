@@ -12,6 +12,7 @@ const orderRoutes = require('./src/routes/orderRoutes');
 const inventoryRoutes = require('./src/routes/inventoryRoutes');
 const expenseRoutes = require('./src/routes/expenseRoutes');
 const reportRoutes = require('./src/routes/reportRoutes');
+const staffRoutes = require('./src/routes/staffRoutes');
 
 
 // Load env vars
@@ -35,6 +36,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/staff', staffRoutes);
 
 // Basic Error Handling Middleware (Catches unhandled route errors)
 app.use((err, req, res, next) => {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../store/AuthContext";
-import api from "../../lib/axiosInstance";
+import api from "../../lib/api";
 
 export default function Login() {
   const [credentials, setCredentials] = useState({
@@ -19,7 +19,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post("/users/login", credentials);
+      const response = await api.post("/api/users/login", credentials);
 
       if (response.data?.token) {
         // 1. Log in and get the user data immediately (sync)

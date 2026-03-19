@@ -23,6 +23,9 @@ const tableSchema = new mongoose.Schema(
     },
     // LOOPHOLE 2 CLOSED: Protects historical order data
     isActive: { type: Boolean, default: true },
+    reservationName: { type: String, default: null },
+    reservationTime: { type: Date, default: null },
+    mergedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: "Table" }], // Links tables together for billing
   },
   { timestamps: true },
 );

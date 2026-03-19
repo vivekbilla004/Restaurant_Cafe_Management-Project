@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import api from "../../lib/axiosInstance";
+import api from "../../lib/api";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -27,7 +27,7 @@ export default function Register() {
 
     try {
       console.log("Sending data to backend:", formData);
-      const response = await api.post("/restaurants/register", formData);
+      const response = await api.post("/api/restaurants/register", formData);
 
       console.log("Backend Success Response:", response.data);
       // Force the redirect to login
