@@ -1,121 +1,87 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './store/AuthContext';
+import { ProtectedRoute, RoleRoute } from './routes/RoleRoute';
+import DashboardLayout from './layouts/DashboardLayout';
+
+// --- Auth Components ---
+import Login from './features/auth/Login';
+import Register from './features/auth/Register';
+
+// --- Feature Components (Placeholders ready for Phase 2 & beyond) ---
+const Dashboard = () => <div className="p-8">Dashboard Screen</div>;
+const MenuManager = () => <div className="p-8">Menu Management Screen</div>;
+const TablesManager = () => <div className="p-8">Tables Management Screen</div>;
+const InventoryManager = () => <div className="p-8">Inventory Management Screen</div>;
+const StaffManager = () => <div className="p-8">Staff Management Screen</div>;
+const ExpenseManager = () => <div className="p-8">Expense Management Screen</div>;
+const Reports = () => <div className="p-8">Reports Screen</div>;
+const Subscription = () => <div className="p-8">Subscription Screen</div>;
+const Settings = () => <div className="p-8">Settings Screen</div>;
+
+// --- Full Screen / Specialized Views ---
+const POS = () => <div className="flex items-center justify-center h-screen w-screen bg-gray-100 text-2xl font-bold">POS Billing Screen (Full Screen)</div>;
+const KOTScreen = () => <div className="flex items-center justify-center h-screen w-screen bg-slate-900 text-white text-2xl font-bold">Kitchen Display Screen</div>;
+const SuperAdminPanel = () => <div className="p-8">Omicra Super Admin Panel</div>;
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-      <div className="ticks"></div>
+          {/* Protected Routes (Must have a valid JWT Token) */}
+          <Route element={<ProtectedRoute />}>
+            
+            {/* --- APPS WRAPPED IN THE SIDEBAR/NAVBAR LAYOUT --- */}
+            <Route element={<DashboardLayout />}>
+              {/* Dashboard: Owners and Managers */}
+              <Route path="/dashboard" element={<RoleRoute allowedRoles={['Owner', 'Manager']}><Dashboard /></RoleRoute>} />
+              
+              {/* Master Data & Settings: Owners Only */}
+              <Route path="/menu" element={<RoleRoute allowedRoles={['Owner']}><MenuManager /></RoleRoute>} />
+              <Route path="/staff" element={<RoleRoute allowedRoles={['Owner']}><StaffManager /></RoleRoute>} />
+              <Route path="/subscription" element={<RoleRoute allowedRoles={['Owner']}><Subscription /></RoleRoute>} />
+              
+              {/* Operations & Reports: Owners and Managers */}
+              <Route path="/inventory" element={<RoleRoute allowedRoles={['Owner', 'Manager']}><InventoryManager /></RoleRoute>} />
+              <Route path="/expenses" element={<RoleRoute allowedRoles={['Owner', 'Manager']}><ExpenseManager /></RoleRoute>} />
+              <Route path="/reports" element={<RoleRoute allowedRoles={['Owner', 'Manager']}><Reports /></RoleRoute>} />
+              <Route path="/settings" element={<RoleRoute allowedRoles={['Owner', 'Manager']}><Settings /></RoleRoute>} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+              {/* Floor Operations: Owners, Managers, Waiters */}
+              <Route path="/tables" element={<RoleRoute allowedRoles={['Owner', 'Manager', 'Waiter']}><TablesManager /></RoleRoute>} />
+            </Route>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            {/* --- FULL SCREEN ROUTES (Outside DashboardLayout) --- */}
+            
+            {/* POS Screen: Anyone handling orders/billing */}
+            <Route path="/pos" element={<RoleRoute allowedRoles={['Owner', 'Manager', 'Cashier', 'Waiter']}><POS /></RoleRoute>} />
+
+            {/* Kitchen Screen: Kitchen Staff and Owners (for oversight) */}
+            <Route path="/kitchen" element={<RoleRoute allowedRoles={['Owner', 'Kitchen']}><KOTScreen /></RoleRoute>} />
+          </Route>
+
+          {/* Super Admin Route (Omicra God-Mode) */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/super-admin" element={<RoleRoute allowedRoles={['SuperAdmin']}><SuperAdminPanel /></RoleRoute>} />
+          </Route>
+
+          {/* Fallback for unauthorized access */}
+          <Route path="/unauthorized" element={
+            <div className="flex flex-col h-screen items-center justify-center bg-gray-50">
+              <h1 className="text-4xl font-bold text-red-600 mb-4">403</h1>
+              <p className="text-lg text-gray-700">You do not have permission to view this page.</p>
+            </div>
+          } />
+          
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }
 
-export default App
+export default App;

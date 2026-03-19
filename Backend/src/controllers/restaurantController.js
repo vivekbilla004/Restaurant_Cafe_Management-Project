@@ -1,7 +1,8 @@
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
-const Subscription = require('../models/Subscription'); // Closing the loophole
+const Subscription = require('../models/Subscription');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs'); // FIX: Import bcryptjs
 
 const generateToken = (id, restaurantId, role) => {
   return jwt.sign({ id, restaurantId, role }, process.env.JWT_SECRET, { expiresIn: '12h' });
@@ -12,6 +13,7 @@ const generateToken = (id, restaurantId, role) => {
 // @access  Public
 const registerRestaurant = async (req, res) => {
   const { restaurantName, ownerName, email, phone, address, password } = req.body;
+  console.log("Registration Request:", req.body);
 
   try {
     const restaurantExists = await Restaurant.findOne({ email });
@@ -44,13 +46,18 @@ const registerRestaurant = async (req, res) => {
       status: 'Active'
     });
 
+    // FIX: Hash the password securely before saving
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     // 4. Create Owner User [cite: 3-13]
     const ownerUser = await User.create({
       restaurantId: restaurant._id,
       name: ownerName,
       email: email, 
-      password: password,
-      role: 'Owner'
+      password: password, // FIX: Use the securely hashed password
+      role: 'Owner',
+      isActive: true // FIX: Ensure the account is active for login
     });
 
     res.status(201).json({
@@ -65,6 +72,7 @@ const registerRestaurant = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Registration Error:", error);
     res.status(500).json({ message: 'Registration failed', error: error.message });
   }
 };
