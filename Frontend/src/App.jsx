@@ -204,16 +204,20 @@ import StaffManager from "./features/staff/StaffManager";
 import POS from "./features/pos/POS";
 import KOTScreen from "./features/kot/KOTScreen";
 import OrdersManager from "./features/orders/OrdersManager";
+import InventoryManager from "./features/inventory/InventoryManager";
+import ExpenseManager from "./features/expenses/ExpenseManager";
+import Reports from "./features/reports/Reports";
+import Dashboard from "./features/dashboard/Dashboard";
 
 // --- Placeholders ready for Phase 4 & beyond ---
-const Dashboard = () => <div className="p-8">Dashboard Screen</div>;
-const InventoryManager = () => (
-  <div className="p-8">Inventory Management Screen</div>
-);
-const ExpenseManager = () => (
-  <div className="p-8">Expense Management Screen</div>
-);
-const Reports = () => <div className="p-8">Reports Screen</div>;
+// const Dashboard = () => <div className="p-8">Dashboard Screen</div>;
+// const InventoryManager = () => (
+//   <div className="p-8">Inventory Management Screen</div>
+// );
+// const ExpenseManager = () => (
+//   <div className="p-8">Expense Management Screen</div>
+// );
+// const Reports = () => <div className="p-8">Reports Screen</div>;
 const Subscription = () => <div className="p-8">Subscription Screen</div>;
 const Settings = () => <div className="p-8">Settings Screen</div>;
 const SuperAdminPanel = () => (

@@ -19,6 +19,7 @@ router.post(
   authorize("Owner", "Manager"),
   markAttendance,
 );
-router.post("/:id/payroll", protect, authorize("Owner"), processPayroll);
+
+router.post('/:id/payroll', protect, authorize('Owner'), processPayroll);
 
 module.exports = router;
