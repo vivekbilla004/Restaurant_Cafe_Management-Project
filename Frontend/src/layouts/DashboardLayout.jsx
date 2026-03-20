@@ -15,6 +15,7 @@ import {
   CreditCard,
   Settings,
   LogOut,
+  ChefHat,
   Menu as MenuIcon,
   X,
 } from "lucide-react";
@@ -42,6 +43,12 @@ export default function DashboardLayout() {
       path: "/pos",
       icon: ShoppingCart,
       roles: ["Owner", "Manager", "Cashier", "Waiter"],
+    },
+    {
+      name: "KOT",
+      path: "/kitchen",
+      icon: ChefHat,
+      roles: ["Owner", "Kitchen"],
     },
     {
       name: "Orders",
