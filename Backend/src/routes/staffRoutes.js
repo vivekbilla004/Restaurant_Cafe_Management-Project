@@ -6,16 +6,17 @@ const {
   getStaffList,
   processPayroll,
 } = require("../controllers/staffController");
-const { protect, authorize } = require("../middleware/authMiddleware");
+const { protect, authorize,checkSubscription } = require("../middleware/authMiddleware");
 
 router
   .route("/")
-  .post(protect, authorize("Owner", "Manager"), addStaff)
-  .get(protect, authorize("Owner", "Manager"), getStaffList);
+  .post(protect, checkSubscription, authorize("Owner", "Manager"), addStaff)
+  .get(protect, checkSubscription, authorize("Owner", "Manager"), getStaffList);
 
 router.post(
   "/:id/attendance",
   protect,
+  checkSubscription,
   authorize("Owner", "Manager"),
   markAttendance,
 );
