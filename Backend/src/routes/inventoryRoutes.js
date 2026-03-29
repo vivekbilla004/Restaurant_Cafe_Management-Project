@@ -17,13 +17,13 @@ const {
 // Only Owners and Managers can manage physical stock [cite: 355-365]
 router
   .route("/")
-  .get(protect, checkSubscription, authorize("Owner", "Manager", "Kitchen"), getInventory) // Kitchen needs to see stock
-  .post(protect, checkSubscription, authorize("Owner", "Manager"), addStock);
+  .get(protect, checkSubscription, authorize("Owner", "Kitchen"), getInventory) // Kitchen needs to see stock
+  .post(protect, checkSubscription, authorize("Owner"), addStock);
 
 // Recipe mapping APIs
 router
   .route("/recipes")
-  .get(protect, checkSubscription, authorize("Owner", "Manager", "Kitchen"), getRecipes)
-  .post(protect, checkSubscription,  authorize("Owner", "Manager"), addRecipe);
+  .get(protect, checkSubscription, authorize("Owner", "Kitchen"), getRecipes)
+  .post(protect, checkSubscription,  authorize("Owner"), addRecipe);
 
 module.exports = router;

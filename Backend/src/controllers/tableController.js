@@ -5,7 +5,6 @@ const Table = require("../models/Table");
 // @access  Private (Owner/Manager)
 const createTable = async (req, res) => {
   const { tableNumber, capacity } = req.body;
-
   try {
     const table = await Table.create({
       restaurantId: req.user.restaurantId,
@@ -14,7 +13,6 @@ const createTable = async (req, res) => {
     });
     res.status(201).json(table);
   } catch (error) {
-    // Catches the unique index error if they try to add "Table 1" twice
     if (error.code === 11000) {
       return res.status(400).json({ message: "Table number already exists" });
     }
@@ -22,7 +20,7 @@ const createTable = async (req, res) => {
   }
 };
 
-// @desc    Get all tables for the restaurant (for POS / Floor Plan)
+// @desc    Get all tables for the restaurant
 // @route   GET /api/tables
 // @access  Private (All Roles)
 const getTables = async (req, res) => {
@@ -32,13 +30,13 @@ const getTables = async (req, res) => {
   res.json(tables);
 };
 
-// @desc    Update Table Status (Available, Occupied, Reserved)
+// @desc    Update Table Status
 // @route   PUT /api/tables/:id/status
 // @access  Private (All Roles - Waiters need this)
 const updateTableStatus = async (req, res) => {
   const { status } = req.body;
-
   const validStatuses = ["Available", "Occupied", "Reserved"];
+
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: "Invalid status" });
   }
@@ -50,6 +48,11 @@ const updateTableStatus = async (req, res) => {
 
   if (table) {
     table.status = status;
+    // FIX: If the table becomes available or occupied, wipe the reservation data!
+    if (status === "Available" || status === "Occupied") {
+      table.reservationName = null;
+      table.reservationTime = null;
+    }
     await table.save();
     res.json(table);
   } else {
@@ -57,31 +60,45 @@ const updateTableStatus = async (req, res) => {
   }
 };
 
-// @desc    Reserve a Table with Name & Time (For Reservations)
+// @desc    Reserve a Table
 // @route   PUT /api/tables/:id/reserve
 // @access  Private (All Roles - Waiters need this)
 const reserveTable = async (req, res) => {
-  const { reservationName, reservationTime } = req.body;
-  const table = await Table.findOne({
-    _id: req.params.id,
-    restaurantId: req.user.restaurantId,
-  });
+  try {
+    const { reservationName, reservationTime } = req.body;
 
-  if (table) {
-    table.status = "Reserved";
-    table.reservationName = reservationName;
-    table.reservationTime = reservationTime;
-    await table.save();
+    // Fixes the date parsing crash
+    const parsedDate = new Date(reservationTime);
+    if (isNaN(parsedDate)) {
+      return res.status(400).json({ message: "Invalid Date format sent from frontend." });
+    }
+
+    const table = await Table.findOneAndUpdate(
+      { _id: req.params.id, restaurantId: req.user.restaurantId },
+      { 
+        $set: { 
+          status: "Reserved",
+          reservationName: reservationName,
+          reservationTime: parsedDate
+        } 
+      },
+      { new: true }
+    );
+
+    if (!table) return res.status(404).json({ message: "Table not found" });
+    
     res.json(table);
-  } else {
-    res.status(404).json({ message: "Table not found" });
+  } catch (error) {
+    console.error("Reservation Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 // @desc    Merge Multiple Tables
 // @route   POST /api/tables/merge
+// @access  Private (Owner/Manager ONLY)
 const mergeTables = async (req, res) => {
-  const { tableIds } = req.body; // Array of table IDs to merge
+  const { tableIds } = req.body;
 
   if (!tableIds || tableIds.length < 2) {
     return res
@@ -89,18 +106,17 @@ const mergeTables = async (req, res) => {
       .json({ message: "Select at least two tables to merge" });
   }
 
-  // Find the primary table (the first one selected)
   const primaryTableId = tableIds[0];
   const secondaryTableIds = tableIds.slice(1);
 
-  // Update the primary table to link to the secondary tables
-  await Table.findByIdAndUpdate(primaryTableId, {
-    $addToSet: { mergedWith: { $each: secondaryTableIds } },
-  });
+  // FIX: Added restaurantId to ensure they only merge THEIR OWN tables
+  await Table.findOneAndUpdate(
+    { _id: primaryTableId, restaurantId: req.user.restaurantId },
+    { $addToSet: { mergedWith: { $each: secondaryTableIds } } },
+  );
 
-  // Update secondary tables to point back to the primary table
   await Table.updateMany(
-    { _id: { $in: secondaryTableIds } },
+    { _id: { $in: secondaryTableIds }, restaurantId: req.user.restaurantId },
     { $set: { mergedWith: [primaryTableId] } },
   );
 

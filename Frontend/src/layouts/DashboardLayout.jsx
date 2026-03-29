@@ -30,8 +30,6 @@ export default function DashboardLayout() {
     navigate("/login");
   };
 
-
-
   // Define the 2.1 Sidebar Menu Items and map them to their required roles
   const menuItems = [
     {
@@ -63,13 +61,13 @@ export default function DashboardLayout() {
       name: "Tables",
       path: "/tables",
       icon: Grid,
-      roles: ["Owner", "Manager", "Waiter"],
+      roles: ["Owner", "Waiter"],
     },
     {
       name: "Inventory",
       path: "/inventory",
       icon: Package,
-      roles: ["Owner", "Manager"],
+      roles: ["Owner"],
     },
     { name: "Staff", path: "/staff", icon: Users, roles: ["Owner"] },
     {

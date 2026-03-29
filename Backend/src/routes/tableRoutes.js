@@ -1,21 +1,31 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { createTable, getTables, updateTableStatus , reserveTable ,mergeTables } = require('../controllers/tableController');
-const { protect, authorize } = require('../middleware/authMiddleware');
+const {
+  getTables,
+  createTable,
+  updateTableStatus,
+  reserveTable,
+  mergeTables,
+} = require("../controllers/tableController");
+const { protect, authorize } = require("../middleware/authMiddleware");
 
-// Read Access: Everyone (Waiters, Cashiers, Kitchen, Managers, Owners)
-router.get('/', protect, getTables);
+// 🟢 FLOOR OPS (Waiters Allowed)
+router.get("/", protect, authorize("Owner", "Manager", "Waiter"), getTables);
+router.put(
+  "/:id/status",
+  protect,
+  authorize("Owner", "Manager", "Waiter"),
+  updateTableStatus,
+);
+router.put(
+  "/:id/reserve",
+  protect,
+  authorize("Owner", "Manager", "Waiter"),
+  reserveTable,
+);
 
-// Status Update Access: Everyone (Waiters need to mark tables Occupied )
-router.put('/:id/status', protect, updateTableStatus);
-
-// Write Access: Strictly Owners and Managers
-router.post('/', protect, authorize('Owner', 'Manager'), createTable);
-
-// Reservation Access: Everyone (Waiters need to reserve tables for customers)
-router.put('/:id/reserve', protect, reserveTable)
-
-// Merge Access: Strictly Owners and Managers (For combining tables during large parties)
-router.post('/merge', protect, mergeTables)
+// 🔴 STRUCTURAL CHANGES (Owners & Managers ONLY)
+router.post("/", protect, authorize("Owner", "Manager"), createTable);
+router.post("/merge", protect, authorize("Owner", "Manager"), mergeTables);
 
 module.exports = router;

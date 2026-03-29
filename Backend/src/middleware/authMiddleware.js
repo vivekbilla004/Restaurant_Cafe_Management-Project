@@ -1,81 +1,121 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const Restaurant = require("../models/Restaurant");
 
-// 1. Authentication (Who are you?)
 const protect = async (req, res, next) => {
   let token;
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
     try {
-      token = req.headers.authorization.split(' ')[1];
+      token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
-      req.user = await User.findById(decoded.id).select('-password');
-      
-      if(!req.user.restaurantId) {
-          return res.status(401).json({ message: 'Tenant ID missing. Access Denied.' });
+
+      req.user = await User.findById(decoded.id).select("-password");
+
+      if (!req.user) {
+        return res.status(401).json({
+          message: "User not found. Please log out and log in again.",
+        });
       }
-      // Loophole closed: Ensure the user's account hasn't been deactivated
-      if(!req.user.isActive) {
-          return res.status(403).json({ message: 'Account deactivated. Contact Owner.' });
+
+      if (!req.user.restaurantId && decoded.restaurantId) {
+        req.user.restaurantId = decoded.restaurantId;
       }
+
       next();
     } catch (error) {
-      res.status(401).json({ message: 'Not authorized, token failed' });
+      return res
+        .status(401)
+        .json({ message: "Not authorized: Token failed or expired." });
     }
+  } else {
+    return res
+      .status(401)
+      .json({ message: "Not authorized: No token provided." });
   }
-  if (!token) res.status(401).json({ message: 'Not authorized, no token' });
 };
 
-// 2. Authorization (What are you allowed to do?)
-// Example usage in future routes: router.get('/reports', protect, authorize('Owner', 'Manager'), getReports);
-const authorize = (...roles) => {
+const authorize = (...allowedRoles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ 
-        message: `Role (${req.user.role}) is not authorized to access this resource.` 
+    // 1. If req.user is missing because 'protect' wasn't put in the route, catch it SAFELY!
+    if (!req.user) {
+      return res.status(401).json({
+        message:
+          "Server Configuration Error: 'protect' middleware is missing from this route.",
       });
     }
+
+    // 2. Check the role safely
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: `Role (${req.user.role}) is not authorized to access this route.`,
+      });
+    }
+
     next();
   };
 };
-
-const checkSubscription = (req, res, next) => {
+const checkSubscription = async (req, res, next) => {
+  // 🔥 MUST BE ASYNC NOW
   try {
-    // 1. Safety Check: Ensure the 'protect' middleware ran first
+    // 1. Safety Check
     if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized. User data missing.' });
+      return res
+        .status(401)
+        .json({ message: "Not authorized. User data missing." });
     }
 
-    // 2. SuperAdmins get a free pass to everything
-    if (req.user.role === 'SuperAdmin') {
+    // 2. GOD MODE: SuperAdmins get a free pass to everything
+    if (req.user.role === "SuperAdmin") {
       return next();
     }
 
-    // 3. The 10-Day Trial Math (Exactly the same as the frontend)
-    const accountCreationDate = new Date(req.user.createdAt || Date.now());
-    const today = new Date();
-    
-    const timeDifference = today.getTime() - accountCreationDate.getTime();
-    const daysActive = Math.floor(timeDifference / (1000 * 3600 * 24));
+    // 3. THE SAAS CHECK: Fetch the Restaurant, not the User
+    const restaurant = await Restaurant.findById(req.user.restaurantId);
 
-    // 4. The Lock Condition
-    const isPaid = req.user.subscriptionStatus === 'Pro';
-    const isExpired = daysActive >= 10 && !isPaid;
+    if (!restaurant) {
+      return res
+        .status(404)
+        .json({ message: "Restaurant account not found in system." });
+    }
 
-    if (isExpired) {
-      // 402 is the official HTTP status code for "Payment Required"
-      return res.status(402).json({ 
-        message: 'Your 10-Day Omicra trial has expired. Please upgrade to Pro to use this feature.',
-        code: 'SUBSCRIPTION_EXPIRED'
+    // 4. Manual Lockout Check (If SuperAdmin disabled them)
+    if (!restaurant.isActive) {
+      return res.status(403).json({
+        message:
+          "ACCOUNT LOCKED: Your subscription was deactivated. Please contact Omicra Support.",
       });
     }
 
-    // 5. If they are paid, or still in the 10-day trial, let them pass!
-    next();
+    // 5. The Trial Expiration Check
+    const today = new Date();
+    // Assuming you set trialEndDate when creating the restaurant
+    const trialEnd = new Date(restaurant.trialEndDate || restaurant.createdAt);
 
+    // Add 14 days to creation date if trialEndDate isn't explicitly set
+    if (!restaurant.trialEndDate) {
+      trialEnd.setDate(trialEnd.getDate() + 14);
+    }
+
+    const isPaid = restaurant.plan === "Pro";
+    const isExpired = today > trialEnd && !isPaid;
+
+    if (isExpired) {
+      return res.status(402).json({
+        message: "Your Omicra trial has expired. Please upgrade to Pro.",
+        code: "SUBSCRIPTION_EXPIRED",
+      });
+    }
+
+    // 6. If they are paid, or still in trial, let them pass!
+    next();
   } catch (error) {
     console.error("Subscription Check Error:", error);
-    res.status(500).json({ message: 'Server error checking subscription status.' });
+    res
+      .status(500)
+      .json({ message: "Server error checking subscription status." });
   }
 };
 

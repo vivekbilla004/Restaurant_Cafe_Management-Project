@@ -14,6 +14,7 @@ const expenseRoutes = require('./src/routes/expenseRoutes');
 const reportRoutes = require('./src/routes/reportRoutes');
 const staffRoutes = require('./src/routes/staffRoutes');
 const subscriptionRoutes = require('./src/routes/subscriptionRoutes');
+const adminRoutes = require('./src/routes/adminRoutes');
 
 
 // Load env vars
@@ -38,8 +39,8 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/staff', staffRoutes);
-app.use('/api/subscription', subscriptionRoutes); // Subscription routes
-
+app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/admin',adminRoutes);
 // Basic Error Handling Middleware (Catches unhandled route errors)
 app.use((err, req, res, next) => {
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;

@@ -26,13 +26,23 @@ export default function Login() {
         const decodedUser = login(response.data.token);
 
         if (decodedUser) {
-          const role = decodedUser.role.toLowerCase();
+          // REMOVED .toLowerCase() so it exactly matches the DB roles!
+          const role = decodedUser.role;
 
-          // 2. Direct Navigation based on role [cite: 169, 176, 183, 187, 192, 195]
-          if (role === "owner" || role === "manager") navigate("/dashboard");
-          else if (role === "cashier" || role === "waiter") navigate("/pos");
-          else if (role === "kitchen") navigate("/kitchen");
-          else navigate("/unauthorized");
+          // 2. Direct Navigation based on role
+          if (role === "SuperAdmin") {
+            navigate("/admin/dashboard");
+          } else if (role === "Owner" || role === "Manager") {
+            navigate("/dashboard");
+          } else if (role === "Cashier" || role === "Waiter") {
+            navigate("/pos");
+          } else if (role === "Waiter") {
+            navigate("/tables");
+          } else if (role === "Kitchen") {
+            navigate("/kitchen");
+          } else {
+            navigate("/unauthorized");
+          }
         }
       }
     } catch (err) {

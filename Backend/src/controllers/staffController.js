@@ -1,21 +1,71 @@
 const Staff = require("../models/Staff");
 const Expense = require("../models/Expense");
+const User = require("../models/User");
 
 // @desc    Add a new Staff Member
 // @route   POST /api/staff
 // @access  Private (Owner/Manager)
+// const addStaff = async (req, res) => {
+//   const { name, role, salary, userId } = req.body;
+
+//   const staff = await Staff.create({
+//     restaurantId: req.user.restaurantId,
+//     name,
+//     role,
+//     salary,
+//     userId: userId || null,
+//   });
+
+//   res.status(201).json(staff);
+// };
+
 const addStaff = async (req, res) => {
-  const { name, role, salary, userId } = req.body;
+  try {
+    // 1. Extract EVERYTHING from the frontend payload
+    const { name, role, salary, phone, email, password } = req.body;
 
-  const staff = await Staff.create({
-    restaurantId: req.user.restaurantId,
-    name,
-    role,
-    salary,
-    userId: userId || null,
-  });
+    // 2. Safety Check: If they provided an email, ensure it isn't already used!
+    if (email) {
+      const userExists = await User.findOne({ email });
+      if (userExists) {
+        return res.status(400).json({ message: 'Email is already registered. Choose another.' });
+      }
+    }
 
-  res.status(201).json(staff);
+    // 3. Create the HR / Payroll Record in the Staff Collection
+    const staff = await Staff.create({
+      restaurantId: req.user.restaurantId,
+      name,
+      role, 
+      salary: Number(salary),
+      phone: phone || 'N/A'
+    });
+
+    // 4. Create the Login Account in the User Collection (THE MISSING LINK)
+    let loginCreated = false;
+    
+    // If the frontend sent an email AND a password, create the login!
+    if (email && password) {
+      await User.create({
+        restaurantId: req.user.restaurantId, // Ties them to your restaurant
+        name,
+        email,
+        password, // Your User.js pre-save hook will auto-hash this!
+        role
+      });
+      loginCreated = true;
+    }
+
+    res.status(201).json({ 
+      message: loginCreated ? 'Staff and Login created successfully!' : 'Staff created (No login access)', 
+      staff,
+      loginCreated
+    });
+
+  } catch (error) {
+    console.error("Add Staff Error:", error);
+    res.status(500).json({ message: "Failed to add staff", error: error.message });
+  }
 };
 
 // @desc    Mark Daily Attendance

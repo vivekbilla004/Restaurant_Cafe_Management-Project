@@ -19,6 +19,7 @@ const StaffManager = () => {
     try {
       setIsLoading(true);
       const response = await api.get("/api/staff");
+      console.log("Fetched Staff Data:", response.data); // Debug log
       setStaffList(response.data);
     } catch (err) {
       toast.error("Failed to load staff records.");
@@ -121,6 +122,7 @@ const StaffManager = () => {
                 </th>
                 <th className="px-6 py-4 font-semibold">Est. Payout</th>
                 <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                <th className="px-6 py-4 font-semibold text-right">email</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -177,6 +179,10 @@ const StaffManager = () => {
                         <Banknote size={16} /> Pay
                       </button>
                     </td>
+                    <td className="px-6 py-4 text-right text-sm text-gray-500">
+                      {staff.email || "No system access"}
+                    </td>
+                    
                   </tr>
                 ))
               )}

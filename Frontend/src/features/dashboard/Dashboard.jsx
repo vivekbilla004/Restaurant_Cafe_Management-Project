@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../../lib/api";
-import { useLocation } from 'react-router-dom';
-import {
-  TrendingUp,
-  ShoppingBag,
-  Banknote,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { TrendingUp, ShoppingBag, Banknote, Wallet } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -56,13 +49,16 @@ const Dashboard = () => {
         // Calculate Top Items dynamically
         const itemTracker = {};
         todaysOrders.forEach((order) => {
-          order.items?.forEach((item) => {
-            const name = item.menuItemId?.name || "Unknown";
-            if (!itemTracker[name])
-              itemTracker[name] = { name, sold: 0, revenue: 0 };
-            itemTracker[name].sold += item.quantity;
-            itemTracker[name].revenue += item.total;
-          },[[location.key]]);
+          order.items?.forEach(
+            (item) => {
+              const name = item.menuItemId?.name || "Unknown";
+              if (!itemTracker[name])
+                itemTracker[name] = { name, sold: 0, revenue: 0 };
+              itemTracker[name].sold += item.quantity;
+              itemTracker[name].revenue += item.total;
+            },
+            [[location.key]],
+          );
         });
         const sortedItems = Object.values(itemTracker)
           .sort((a, b) => b.sold - a.sold)

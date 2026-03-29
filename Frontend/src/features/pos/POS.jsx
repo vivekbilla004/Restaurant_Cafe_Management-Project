@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import api from "../../lib/api";
 import toast, { Toaster } from "react-hot-toast";
 import usePosStore from "../../store/posStore";
+import { useAuth } from "../../store/AuthContext";
+
 import {
   ShoppingBag,
   Printer,
@@ -22,6 +24,7 @@ const POS = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const [tables, setTables] = useState([]);
   const [paymentMode, setPaymentMode] = useState("Cash");
+  const { user } = useAuth();
 
   // --- NEW LOOPHOLE FIX STATES ---
   const [showReceipt, setShowReceipt] = useState(false);
@@ -170,7 +173,17 @@ const POS = () => {
         {/* CENTER: Item Grid (55%) */}
         <div className="w-[55%] flex flex-col bg-slate-50">
           <div className="px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-xl font-bold text-slate-800">Menu Grid</h2>
+            <h2 className="text-xl font-bold text-slate-800">Menu Grid</h2> 
+            {(user?.role === "Waiter" ||
+              user?.role === "Manager" ||
+              user?.role === "Owner") && (
+              <button
+                onClick={() => navigate("/tables")}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition"
+              >
+                <ArrowLeft size={18} /> Floor Plan
+              </button>
+            )}
             <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
               {["DineIn", "Parcel", "Online"].map((type) => (
                 <button

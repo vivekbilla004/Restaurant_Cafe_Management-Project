@@ -1,9 +1,18 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const bcrypt = require('bcryptjs');
+const bcrypt = require("bcryptjs");
 
+// 1. FIX: Use the actual parameters passed into the function!
 const generateToken = (id, restaurantId, role) => {
-  return jwt.sign({ id, restaurantId, role }, process.env.JWT_SECRET, { expiresIn: '12h' });
+  return jwt.sign(
+    {
+      id: id,
+      restaurantId: restaurantId,
+      role: role,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "30d" },
+  );
 };
 
 // @desc    Auth user & get token
@@ -23,7 +32,7 @@ const loginUser = async (req, res) => {
         .json({ message: "Invalid credentials - User not found" });
     }
 
-    // FIX 2: Use bcrypt.compare directly. This ALWAYS works.
+    // 2. Use bcrypt.compare directly
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (isMatch) {
@@ -32,6 +41,8 @@ const loginUser = async (req, res) => {
       }
 
       console.log("Login successful! Generating token...");
+
+      // 3. This will now successfully pass the real user data to generateToken!
       res.json({
         _id: user._id,
         name: user.name,
@@ -55,13 +66,11 @@ const loginUser = async (req, res) => {
 // @access  Private (Owner/Manager Only)
 const createUser = async (req, res) => {
   const { name, email, password, role } = req.body;
-  console.log(req.body);
 
   const userExists = await User.findOne({ email });
   if (userExists)
     return res.status(400).json({ message: "Email already in use" });
 
-  // Multi-tenant check: Auto-assign the creator's restaurantId
   const user = await User.create({
     restaurantId: req.user.restaurantId,
     name,
@@ -71,8 +80,6 @@ const createUser = async (req, res) => {
   });
 
   if (user) {
-    // NOTE: In the future, this could trigger an event to also create a record
-    // in the 'Staff' collection for salary tracking .
     res
       .status(201)
       .json({ message: "User access created successfully", userId: user._id });
@@ -81,7 +88,7 @@ const createUser = async (req, res) => {
   }
 };
 
-// @desc    Toggle user active status (instead of hard deleting)
+// @desc    Toggle user active status
 // @route   PUT /api/users/:id/status
 // @access  Private (Owner Only)
 const toggleUserStatus = async (req, res) => {
@@ -91,7 +98,7 @@ const toggleUserStatus = async (req, res) => {
   });
 
   if (user) {
-    user.isActive = !user.isActive; //
+    user.isActive = !user.isActive;
     await user.save();
     res.json({
       message: `User status changed to ${user.isActive ? "Active" : "Inactive"}`,
