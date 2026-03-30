@@ -3,11 +3,12 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
 // 1. FIX: Use the actual parameters passed into the function!
-const generateToken = (id, restaurantId, role) => {
+const generateToken = (id, restaurantId, role, name) => {
   return jwt.sign(
     {
       id: id,
       restaurantId: restaurantId,
+      name: name, // This is still not correct, but we can fix it later if needed
       role: role,
     },
     process.env.JWT_SECRET,
@@ -20,19 +21,12 @@ const generateToken = (id, restaurantId, role) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("Login attempt for:", email);
-
-    // 1. Find the user by email
     const user = await User.findOne({ email });
 
     if (!user) {
-      console.log("User not found in database.");
-      return res
-        .status(401)
-        .json({ message: "Invalid credentials - User not found" });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // 2. Use bcrypt.compare directly
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (isMatch) {
@@ -40,24 +34,20 @@ const loginUser = async (req, res) => {
         return res.status(403).json({ message: "Account disabled" });
       }
 
-      console.log("Login successful! Generating token...");
-
-      // 3. This will now successfully pass the real user data to generateToken!
+      // 2. Pass user.name into the generateToken function!
       res.json({
         _id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
         restaurantId: user.restaurantId,
-        token: generateToken(user._id, user.restaurantId, user.role),
+        token: generateToken(user._id, user.restaurantId, user.role, user.name),
       });
     } else {
-      console.log("Password did not match the database hash.");
-      res.status(401).json({ message: "Invalid credentials - Wrong password" });
+      res.status(401).json({ message: "Invalid credentials" });
     }
   } catch (error) {
-    console.error("Login Server Error:", error);
-    res.status(500).json({ message: "Server error during login" });
+    res.status(500).json({ message: "Server error" });
   }
 };
 

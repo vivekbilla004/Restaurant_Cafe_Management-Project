@@ -1,5 +1,5 @@
-const Category = require('../models/Category');
-const MenuItem = require('../models/MenuItem');
+const Category = require("../models/Category");
+const MenuItem = require("../models/MenuItem");
 
 // ==============================
 // CATEGORY CONTROLLERS
@@ -10,14 +10,18 @@ const MenuItem = require('../models/MenuItem');
 // @access  Private (Owner/Manager)
 const createCategory = async (req, res) => {
   const { name } = req.body;
-  
+
   // Prevent duplicate categories in the same restaurant
-  const categoryExists = await Category.findOne({ name, restaurantId: req.user.restaurantId });
-  if (categoryExists) return res.status(400).json({ message: 'Category already exists' });
+  const categoryExists = await Category.findOne({
+    name,
+    restaurantId: req.user.restaurantId,
+  });
+  if (categoryExists)
+    return res.status(400).json({ message: "Category already exists" });
 
   const category = await Category.create({
     restaurantId: req.user.restaurantId,
-    name
+    name,
   });
 
   res.status(201).json(category);
@@ -34,32 +38,41 @@ const createMenuItem = async (req, res) => {
   const { categoryId, name, price, image } = req.body;
 
   // Validate that the category actually belongs to this restaurant (Loophole closed)
-  const category = await Category.findOne({ _id: categoryId, restaurantId: req.user.restaurantId });
-  if (!category) return res.status(404).json({ message: 'Invalid Category' });
+  const category = await Category.findOne({
+    _id: categoryId,
+    restaurantId: req.user.restaurantId,
+  });
+  if (!category) return res.status(404).json({ message: "Invalid Category" });
 
   const menuItem = await MenuItem.create({
     restaurantId: req.user.restaurantId,
     categoryId,
     name,
     price,
-    image
+    image,
   });
 
   res.status(201).json(menuItem);
 };
 
-// @desc    Toggle Menu Item Availability (Enable/Disable) 
+// @desc    Toggle Menu Item Availability (Enable/Disable)
 // @route   PUT /api/menu/items/:id/status
 // @access  Private (Owner/Manager)
 const toggleMenuItemStatus = async (req, res) => {
-  const menuItem = await MenuItem.findOne({ _id: req.params.id, restaurantId: req.user.restaurantId });
+  const menuItem = await MenuItem.findOne({
+    _id: req.params.id,
+    restaurantId: req.user.restaurantId,
+  });
 
   if (menuItem) {
     menuItem.isAvailable = !menuItem.isAvailable;
     await menuItem.save();
-    res.json({ message: `Item is now ${menuItem.isAvailable ? 'Available' : 'Unavailable'}`, menuItem });
+    res.json({
+      message: `Item is now ${menuItem.isAvailable ? "Available" : "Unavailable"}`,
+      menuItem,
+    });
   } else {
-    res.status(404).json({ message: 'Menu item not found' });
+    res.status(404).json({ message: "Menu item not found" });
   }
 };
 
@@ -78,35 +91,42 @@ const getMenuForPOS = async (req, res) => {
       { $match: { restaurantId: req.user.restaurantId } },
       {
         $lookup: {
-          from: 'menuitems', // Must match MongoDB's auto-pluralized collection name
-          let: { catId: '$_id' },
+          from: "menuitems", // Must match MongoDB's auto-pluralized collection name
+          let: { catId: "$_id" },
           pipeline: [
-            { 
-              $match: { 
-                $expr: { $eq: ['$categoryId', '$$catId'] },
-                isAvailable: true // Only fetch items they can actually sell
-              } 
-            }
+            {
+              $match: {
+                $expr: { $eq: ["$categoryId", "$$catId"] },
+                isAvailable: true, // Only fetch items they can actually sell
+              },
+            },
           ],
-          as: 'items'
-        }
-      }
+          as: "items",
+        },
+      },
     ]);
 
     res.json(posData);
   } catch (error) {
-    res.status(500).json({ message: 'Error loading POS data', error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error loading POS data", error: error.message });
   }
 };
+
+
 
 // @desc    Update Menu Item (Price/Name)
 // @route   PUT /api/menu/items/:id
 // @access  Private (Owner/Manager)
 const updateMenuItem = async (req, res) => {
   const { name, price, categoryId, image } = req.body;
-  
-  const menuItem = await MenuItem.findOne({ _id: req.params.id, restaurantId: req.user.restaurantId });
-  
+
+  const menuItem = await MenuItem.findOne({
+    _id: req.params.id,
+    restaurantId: req.user.restaurantId,
+  });
+
   if (menuItem) {
     // Note: Changing this price will NOT affect past orders (handled in Order module)
     menuItem.name = name || menuItem.name;
@@ -117,14 +137,58 @@ const updateMenuItem = async (req, res) => {
     const updatedItem = await menuItem.save();
     res.json(updatedItem);
   } else {
-    res.status(404).json({ message: 'Menu item not found' });
+    res.status(404).json({ message: "Menu item not found" });
   }
 };
 
-module.exports = { 
-  createCategory, 
-  createMenuItem, 
-  toggleMenuItemStatus, 
-  updateMenuItem,   
-  getMenuForPOS 
+// @desc    Soft Delete (Archive) Menu Item - It won't show in POS but stays in DB for historical orders
+const archiveMenuItem = async (req, res) => {
+  try {
+    const menuItem = await MenuItem.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
+
+    if (!menuItem) return res.status(404).json({ message: "Item not found" });
+
+    // 🔥 THE SOFT DELETE: We don't remove it from DB, we just hide it forever
+    menuItem.isAvailable = false;
+    menuItem.isArchived = true;
+    await menuItem.save();
+
+    res.json({ message: `${menuItem.name} removed from menu.` });
+  } catch (error) {
+    res.status(500).json({ message: "Error removing item" });
+  }
+};
+
+// Update getMenuForAdmin to ignore archived items
+const getMenuForAdmin = async (req, res) => {
+  const adminData = await Category.aggregate([
+    { $match: { restaurantId: req.user.restaurantId } },
+    {
+      $lookup: {
+        from: 'menuitems',
+        let: { catId: '$_id' },
+        pipeline: [
+          { $match: { 
+            $expr: { $eq: ['$categoryId', '$$catId'] },
+            isArchived: { $ne: true } // 🔥 DON'T SHOW DELETED ITEMS
+          }}
+        ],
+        as: 'items'
+      }
+    }
+  ]);
+  res.json(adminData);
+};
+
+module.exports = {
+  createCategory,
+  createMenuItem,
+  toggleMenuItemStatus,
+  updateMenuItem,
+  getMenuForPOS,
+  getMenuForAdmin,
+  archiveMenuItem,
 };

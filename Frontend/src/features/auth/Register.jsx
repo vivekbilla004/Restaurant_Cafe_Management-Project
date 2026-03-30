@@ -15,7 +15,7 @@ export default function Register() {
   });
   const [error, setError] = useState("");
 
-  const handleChange = (e) => {
+  const handleChange = (e) => {generateToken
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 

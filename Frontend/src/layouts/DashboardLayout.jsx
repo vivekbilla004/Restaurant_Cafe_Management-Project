@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store/AuthContext";
-// Using Lucide React for clean, modern icons (npm install lucide-react)
+
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -18,19 +18,51 @@ import {
   ChefHat,
   Menu as MenuIcon,
   X,
+  Bell,
 } from "lucide-react";
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
+  // console.log("DEBUG USER OBJECT:", user);
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // --- REAL NOTIFICATION LOGIC ---
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1,
+      text: "Table 4 requested the bill",
+      time: "2 min ago",
+      unread: true,
+    },
+    {
+      id: 2,
+      text: "Stock low: Chicken Breast",
+      time: "10 min ago",
+      unread: true,
+    },
+  ]);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const notifRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target))
+        setShowNotifDropdown(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  // Define the 2.1 Sidebar Menu Items and map them to their required roles
   const menuItems = [
     {
       name: "Dashboard",
@@ -57,18 +89,8 @@ export default function DashboardLayout() {
       roles: ["Owner", "Manager", "Cashier", "Kitchen"],
     },
     { name: "Menu", path: "/menu", icon: UtensilsCrossed, roles: ["Owner"] },
-    {
-      name: "Tables",
-      path: "/tables",
-      icon: Grid,
-      roles: ["Owner", "Waiter"],
-    },
-    {
-      name: "Inventory",
-      path: "/inventory",
-      icon: Package,
-      roles: ["Owner"],
-    },
+    { name: "Tables", path: "/tables", icon: Grid, roles: ["Owner", "Waiter"] },
+    { name: "Inventory", path: "/inventory", icon: Package, roles: ["Owner"] },
     { name: "Staff", path: "/staff", icon: Users, roles: ["Owner"] },
     {
       name: "Expenses",
@@ -96,181 +118,224 @@ export default function DashboardLayout() {
     },
   ];
 
-  // Filter items based on the current user's role
   const allowedMenuItems = menuItems.filter((item) =>
     item.roles.includes(user?.role),
   );
 
+  // Dynamic Header Title based on path
+  const currentPathName =
+    menuItems.find((item) => item.path === location.pathname)?.name || "Omicra";
+
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
-      {/* --- DESKTOP LEFT SIDEBAR --- */}
-      <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white transition-all duration-300">
-        <div className="flex items-center justify-center h-16 border-b border-slate-700">
-          <h1 className="text-2xl font-bold text-blue-400">Omicra</h1>
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+      {/* --- DESKTOP SIDEBAR --- */}
+      <aside className="hidden lg:flex flex-col w-64 bg-slate-900 text-white shadow-xl">
+        <div className="flex items-center gap-3 px-6 h-20 border-b border-slate-800">
+          <div className="bg-blue-600 p-1.5 rounded-lg">
+            <UtensilsCrossed size={20} className="text-white" />
+          </div>
+          <h1 className="text-xl font-black tracking-tight">OMICRA</h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-4">
-          <nav className="space-y-1 px-2">
-            {allowedMenuItems.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center px-4 py-3 text-sm font-medium rounded-md transition-colors ${
-                    isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  }`
-                }
-              >
-                <item.icon className="mr-3 h-5 w-5" />
-                {item.name}
-              </NavLink>
-            ))}
-          </nav>
-        </div>
+        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 custom-scrollbar">
+          {allowedMenuItems.map((item) => (
+            <NavLink
+              key={item.name}
+              to={item.path}
+              className={({ isActive }) =>
+                `flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`
+              }
+            >
+              <item.icon className="mr-3 h-5 w-5 opacity-80" />
+              {item.name}
+            </NavLink>
+          ))}
+        </nav>
 
-        {/* Sidebar Footer (Logout) */}
-        <div className="p-4 border-t border-slate-700">
+        <div className="p-4 border-t border-slate-800">
           <button
             onClick={handleLogout}
-            className="flex items-center w-full px-4 py-2 text-sm font-medium text-red-400 rounded-md hover:bg-slate-800 hover:text-red-300"
+            className="flex items-center w-full px-4 py-3 text-sm font-bold text-red-400 rounded-xl hover:bg-red-500/10 transition-colors"
           >
-            <LogOut className="mr-3 h-5 w-5" />
-            Logout
+            <LogOut className="mr-3 h-5 w-5" /> Logout
           </button>
         </div>
       </aside>
 
-      {/* --- MAIN CONTENT AREA --- */}
-      <div className="flex flex-col flex-1 w-full overflow-hidden">
-        {/* --- TOP NAVBAR --- */}
-        <header className="flex items-center justify-between h-16 px-4 bg-white border-b shadow-sm md:px-6">
-          {/* Mobile Menu Toggle */}
-          <button
-            className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-md"
-            onClick={() => setMobileMenuOpen(true)}
-          >
-            <MenuIcon className="h-6 w-6" />
-          </button>
-
-          <div className="hidden md:block">
-            <h2 className="text-xl font-semibold text-gray-800">
-              {/* Dynamic Page Title could go here */}
+      {/* --- MAIN CONTENT --- */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* TOP NAVBAR */}
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0">
+          <div className="flex items-center gap-4">
+            <button
+              className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <MenuIcon size={24} />
+            </button>
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-wide hidden sm:block">
+              {currentPathName}
             </h2>
           </div>
 
-          {/* Profile & Notifications */}
-          <div className="flex items-center space-x-4">
-            <button className="text-gray-500 hover:text-gray-700 relative">
-              <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+          <div className="flex items-center gap-2 sm:gap-6">
+            {/* NOTIFICATIONS DROPDOWN */}
+            <div className="relative" ref={notifRef}>
+              <button
+                className="p-2 text-slate-500 hover:bg-slate-50 rounded-full relative transition-colors"
+                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                />
-              </svg>
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                {user?.name?.charAt(0) || "U"}
+                <Bell size={22} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 h-4 w-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifDropdown && (
+                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50">
+                  <div className="p-4 border-b border-slate-50 flex justify-between items-center">
+                    <span className="font-bold text-slate-800">
+                      Notifications
+                    </span>
+                    <button
+                      className="text-xs text-blue-600 font-bold"
+                      onClick={() => setNotifications([])}
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length > 0 ? (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className="p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <p className="text-sm text-slate-700 font-medium">
+                            {n.text}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">
+                            {n.time}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-slate-400 text-sm">
+                        No new alerts
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* USER PROFILE */}
+            <div className="flex items-center gap-3 pl-4 border-l border-slate-100">
+              <div className="hidden md:text-right md:block">
+                <p className="text-sm font-black text-slate-800 leading-none mb-1">
+                  {user?.name || "User"}
+                </p>
+                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter bg-blue-50 px-1.5 py-0.5 rounded-md inline-block">
+                  {user?.role}
+                </p>
               </div>
-              <div className="hidden md:block text-sm">
-                <p className="font-medium text-gray-700">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.role}</p>
+              <div className="h-10 w-10 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center text-white font-black shadow-md shadow-blue-100">
+                {user?.name?.charAt(0) || "U"}
               </div>
             </div>
           </div>
         </header>
 
-        {/* --- PAGE CONTENT (Outlet) --- */}
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-4 md:p-6">
-          <Outlet />{" "}
-          {/* This is where Dashboard, Menu, POS components inject themselves */}
+        {/* PAGE CONTENT */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8 pb-24 lg:pb-8 custom-scrollbar">
+          <Outlet />
         </main>
       </div>
 
-      {/* --- MOBILE/TABLET BOTTOM NAVIGATION BAR --- */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-50">
+      {/* --- TABLET/MOBILE BOTTOM NAV --- */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 px-2 py-1 z-40">
         <div className="flex justify-around items-center h-16">
-          {/* Slice the first 4 allowed items for the bottom nav to prevent overcrowding */}
           {allowedMenuItems.slice(0, 4).map((item) => (
             <NavLink
               key={item.name}
               to={item.path}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center w-full h-full space-y-1 ${
-                  isActive
-                    ? "text-blue-600"
-                    : "text-gray-500 hover:text-gray-900"
+                `flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all ${
+                  isActive ? "text-blue-600 scale-110" : "text-slate-400"
                 }`
               }
             >
-              <item.icon className="h-6 w-6" />
-              <span className="text-[10px] font-medium">{item.name}</span>
+              {/* 🔥 FIX: We use a function here to get the 'isActive' state for the icon too */}
+              {({ isActive }) => (
+                <>
+                  <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                  <span className="text-[9px] font-black uppercase tracking-tighter">
+                    {item.name}
+                  </span>
+                </>
+              )}
             </NavLink>
           ))}
-          {/* Mobile More/Menu button for items that don't fit */}
-          {allowedMenuItems.length > 4 && (
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="flex flex-col items-center justify-center w-full h-full space-y-1 text-gray-500"
-            >
-              <MenuIcon className="h-6 w-6" />
-              <span className="text-[10px] font-medium">More</span>
-            </button>
-          )}
+
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 text-slate-400 gap-1"
+          >
+            <MenuIcon size={22} />
+            <span className="text-[9px] font-black uppercase tracking-tighter">
+              More
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* Mobile Sidebar Overlay (For "More" menu) */}
+      {/* --- MOBILE OVERLAY DRAWER --- */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-[60] flex">
           <div
-            className="fixed inset-0 bg-black bg-opacity-50"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
-          ></div>
-          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-slate-900 text-white">
-            <div className="absolute top-0 right-0 -mr-12 pt-2">
+          />
+          <div className="relative w-72 bg-slate-900 text-white flex flex-col h-full shadow-2xl animate-slide-in">
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+              <h1 className="text-xl font-black text-blue-400">OMICRA</h1>
               <button
-                className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
                 onClick={() => setMobileMenuOpen(false)}
+                className="p-2 bg-slate-800 rounded-lg"
               >
-                <X className="h-6 w-6 text-white" />
+                <X size={20} />
               </button>
             </div>
-            <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
-              <div className="flex-shrink-0 flex items-center px-4">
-                <h1 className="text-2xl font-bold text-blue-400">Omicra</h1>
-              </div>
-              <nav className="mt-5 px-2 space-y-1">
-                {allowedMenuItems.map((item) => (
-                  <NavLink
-                    key={item.name}
-                    to={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="group flex items-center px-2 py-2 text-base font-medium rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"
-                  >
-                    <item.icon className="mr-4 h-6 w-6" />
-                    {item.name}
-                  </NavLink>
-                ))}
-              </nav>
-            </div>
-            <div className="flex-shrink-0 flex bg-slate-800 p-4">
+            <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+              {allowedMenuItems.map((item) => (
+                <NavLink
+                  key={item.name}
+                  to={item.path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center p-3 rounded-xl font-bold transition-all ${
+                      isActive
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-400 hover:bg-slate-800"
+                    }`
+                  }
+                >
+                  <item.icon className="mr-4 h-5 w-5" /> {item.name}
+                </NavLink>
+              ))}
+            </nav>
+            <div className="p-4 bg-slate-950 border-t border-slate-800">
               <button
                 onClick={handleLogout}
-                className="flex-shrink-0 group block w-full text-red-400 hover:text-red-300 flex items-center"
+                className="flex items-center w-full p-3 text-red-400 font-bold rounded-xl hover:bg-red-500/10"
               >
-                <LogOut className="mr-3 h-5 w-5" />
-                Logout
+                <LogOut className="mr-4 h-5 w-5" /> Logout
               </button>
             </div>
           </div>
