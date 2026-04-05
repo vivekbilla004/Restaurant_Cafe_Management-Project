@@ -11,51 +11,48 @@ const SubscriptionGuard = () => {
   const location = useLocation();
 
   useEffect(() => {
+    // 🔥 LOOPHOLE 2 FIX: Prevent Infinite Loop!
+    if (location.pathname === '/subscription') {
+      setIsLoading(false);
+      return;
+    }
+
     const verifySubscription = async () => {
-      // SuperAdmins bypass the lock completely
       if (!user || user.role === 'SuperAdmin') {
         setIsLoading(false);
         return;
       }
 
       try {
-        // Ask the backend for the ABSOLUTE TRUTH from the MongoDB Subscription Model
         const res = await api.get('/api/subscription/current');
-        
-        if (res.data.status === 'Expired') {
-          setIsExpired(true);
-        } else {
-          setIsExpired(false);
-        }
+        setIsExpired(res.data.status === 'Expired');
       } catch (err) {
         console.error("Subscription Guard Error:", err);
-        // If the API fails (or returns 402 Payment Required), lock the doors to be safe
-        setIsExpired(true);
+        setIsExpired(true); // Default to locked if API fails/402
       } finally {
         setIsLoading(false);
       }
     };
 
     verifySubscription();
-  }, [location.pathname, user]); // Re-check whenever they click a new sidebar link
+  }, [user]); // 🔥 LOOPHOLE 1 FIX: Removed location.pathname! Only runs on initial load/login.
 
   if (isLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
-        <Loader className="animate-spin text-blue-600" size={48} />
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-white">
+        <Loader className="animate-spin text-blue-500 mb-4" size={48} />
+        <p className="font-bold tracking-widest uppercase text-xs text-slate-400">Verifying License...</p>
       </div>
     );
   }
 
   // ==========================================
-  // THE REDIRECT LOCK
+  // 🔥 LOOPHOLE 3 FIX: Role-Based Lockout
   // ==========================================
-  if (isExpired) {
-    // If they are expired, immediately teleport them to the Subscription Renewal page
+  if (isExpired && location.pathname !== '/subscription') {
     return <Navigate to="/subscription" replace />;
   }
 
-  // If active, let them into the POS, Dashboard, etc!
   return <Outlet />;
 };
 

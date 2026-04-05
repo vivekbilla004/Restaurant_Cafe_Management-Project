@@ -209,11 +209,12 @@ const MenuManager = () => {
       )}
       {isItemModalOpen && (
         <ItemModal
-          onClose={() => setItemModalOpen(false)} 
+          onClose={() => setItemModalOpen(false)}
           refreshData={fetchMenu}
           itemToEdit={editingItem}
-          categories={menuData} 
-          />)}
+          categories={menuData}
+        />
+      )}
     </div>
   );
 };
