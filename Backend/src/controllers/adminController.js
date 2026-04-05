@@ -1,6 +1,5 @@
 const Restaurant = require("../models/Restaurant");
 const User = require("../models/User");
-const bcrypt = require("bcryptjs");
 
 // @desc    Get all Omicra Clients (Restaurants) & basic revenue stats
 // @route   GET /api/admin/restaurants
@@ -22,6 +21,14 @@ const createRestaurant = async (req, res) => {
     req.body;
 
   try {
+    // 🔥 FIX 1: Early Exit. Check if email exists BEFORE creating the restaurant
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ message: "Email is already registered to another user." });
+    }
+
     // 1. Create the SaaS Tenant (The Restaurant)
     const restaurant = await Restaurant.create({
       name: restaurantName,
@@ -31,20 +38,17 @@ const createRestaurant = async (req, res) => {
       address,
       plan: plan || "Basic",
       trialStartDate: new Date(),
-      trialEndDate: new Date(new Date().setDate(new Date().getDate() + 14)), // 14 Day Trial
+      trialEndDate: new Date(new Date().setDate(new Date().getDate() + 30)), // 🔥 FIX 2: 30 Day Trial
       isActive: true,
     });
 
-    // 2. Hash the default password for the new Owner
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // 3. Create the Owner Account linked to this new Restaurant
+    // 2. Create the Owner Account
+    // 🔥 FIX 3: Pass plain text password! Your User.js model's pre('save') hook will safely hash it once.
     const owner = await User.create({
-      restaurantId: restaurant._id, // Links them to the vault!
+      restaurantId: restaurant._id,
       name: ownerName,
       email: email,
-      password: hashedPassword,
+      password: password,
       role: "Owner",
       isActive: true,
     });
@@ -56,13 +60,11 @@ const createRestaurant = async (req, res) => {
     });
   } catch (error) {
     console.error("Client Creation Error:", error);
-    res
-      .status(500)
-      .json({ message: "Failed to create restaurant. Email might be taken." });
+    res.status(500).json({ message: "Failed to create restaurant." });
   }
 };
 
-// @desc    Lock/Unlock a Restaurant (If they don't pay)
+// @desc    Lock/Unlock a Restaurant
 // @route   PUT /api/admin/restaurants/:id/status
 // @access  Private (SuperAdmin)
 const toggleRestaurantStatus = async (req, res) => {
@@ -103,9 +105,31 @@ const updateRestaurantPlan = async (req, res) => {
   }
 };
 
+// @desc    Broadcast message to all tenants
+// @route   PUT /api/admin/broadcast
+// @access  Private (SuperAdmin)
+const broadcastMessage = async (req, res) => {
+  try {
+    const { message, clear } = req.body;
+    const update = clear
+      ? { $unset: { systemMessage: "" } }
+      : { $set: { systemMessage: message } };
+
+    await Restaurant.updateMany({}, update);
+    res.json({
+      message: clear
+        ? "System messages cleared."
+        : "Broadcast sent to all clients!",
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to broadcast message" });
+  }
+};
+
 module.exports = {
   getAllRestaurants,
   createRestaurant,
   toggleRestaurantStatus,
   updateRestaurantPlan,
+  broadcastMessage,
 };

@@ -87,23 +87,44 @@ const getMenuForPOS = async (req, res) => {
   try {
     // This fetches all categories and their ACTIVE items in one efficient query
     // This ensures the "POS Load Time < 2 Seconds" rule is met [cite: 324]
+    // const posData = await Category.aggregate([
+    //   { $match: { restaurantId: req.user.restaurantId } },
+    //   {
+    //     $lookup: {
+    //       from: "menuitems", // Must match MongoDB's auto-pluralized collection name
+    //       let: { catId: "$_id" },
+    //       pipeline: [
+    //         {
+    //           $match: {
+    //             $expr: { $eq: ["$categoryId", "$$catId"] },
+    //             isAvailable: true, // Only fetch items they can actually sell
+    //           },
+    //         },
+    //       ],
+    //       as: "items",
+    //     },
+    //   },
+    // ]);
     const posData = await Category.aggregate([
       { $match: { restaurantId: req.user.restaurantId } },
       {
         $lookup: {
-          from: "menuitems", // Must match MongoDB's auto-pluralized collection name
+          from: "menuitems",
           let: { catId: "$_id" },
           pipeline: [
             {
               $match: {
                 $expr: { $eq: ["$categoryId", "$$catId"] },
-                isAvailable: true, // Only fetch items they can actually sell
+                isAvailable: true,
+                isArchived: { $ne: true }, // Ensure POS hides archived items too!
               },
             },
           ],
           as: "items",
         },
       },
+      // 🔥 FIX: Filter out categories that have an empty items array
+      { $match: { "items.0": { $exists: true } } },
     ]);
 
     res.json(posData);
@@ -113,8 +134,6 @@ const getMenuForPOS = async (req, res) => {
       .json({ message: "Error loading POS data", error: error.message });
   }
 };
-
-
 
 // @desc    Update Menu Item (Price/Name)
 // @route   PUT /api/menu/items/:id
@@ -168,17 +187,19 @@ const getMenuForAdmin = async (req, res) => {
     { $match: { restaurantId: req.user.restaurantId } },
     {
       $lookup: {
-        from: 'menuitems',
-        let: { catId: '$_id' },
+        from: "menuitems",
+        let: { catId: "$_id" },
         pipeline: [
-          { $match: { 
-            $expr: { $eq: ['$categoryId', '$$catId'] },
-            isArchived: { $ne: true } // 🔥 DON'T SHOW DELETED ITEMS
-          }}
+          {
+            $match: {
+              $expr: { $eq: ["$categoryId", "$$catId"] },
+              isArchived: { $ne: true }, // 🔥 DON'T SHOW DELETED ITEMS
+            },
+          },
         ],
-        as: 'items'
-      }
-    }
+        as: "items",
+      },
+    },
   ]);
   res.json(adminData);
 };

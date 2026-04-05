@@ -5,8 +5,13 @@ const {
   markAttendance,
   getStaffList,
   processPayroll,
+  removeStaff,
 } = require("../controllers/staffController");
-const { protect, authorize,checkSubscription } = require("../middleware/authMiddleware");
+const {
+  protect,
+  authorize,
+  checkSubscription,
+} = require("../middleware/authMiddleware");
 
 router
   .route("/")
@@ -21,6 +26,12 @@ router.post(
   markAttendance,
 );
 
-router.post('/:id/payroll', protect, authorize('Owner'), processPayroll);
+router.post("/:id/payroll", protect, authorize("Owner"), processPayroll);
+router.delete(
+  "/:id",
+  protect,
+  authorize("Owner"), // 🔒 Only the Owner can fire staff
+  removeStaff,
+);
 
 module.exports = router;

@@ -1,5 +1,4 @@
 const Order = require("../models/Order");
-const OrderItem = require("../models/OrderItem");
 const Table = require("../models/Table");
 const MenuItem = require("../models/MenuItem");
 const { deductInventoryForOrder } = require("./inventoryController");
@@ -15,6 +14,7 @@ const createOrder = async (req, res) => {
     discount = 0,
     tax = 0,
     paymentMode = "Pending",
+    splitPayments = [],
   } = req.body;
 
   if (!items || items.length === 0)
@@ -22,8 +22,9 @@ const createOrder = async (req, res) => {
 
   try {
     let calculatedTotalAmount = 0;
-    const orderItemsToInsert = [];
+    const verifiedItems = [];
 
+    // 1. Verify and Snapshot items from DB
     for (const item of items) {
       const menuItem = await MenuItem.findOne({
         _id: item.menuItemId,
@@ -35,39 +36,39 @@ const createOrder = async (req, res) => {
       const itemTotal = menuItem.price * item.quantity;
       calculatedTotalAmount += itemTotal;
 
-      orderItemsToInsert.push({
+      verifiedItems.push({
         menuItemId: menuItem._id,
+        name: menuItem.name, // 🔥 SNAPSHOT: Name secured
+        price: menuItem.price, // 🔥 SNAPSHOT: Price secured
         quantity: item.quantity,
-        price: menuItem.price,
         total: itemTotal,
       });
     }
 
     const finalAmount = calculatedTotalAmount - discount + tax;
 
+    // 2. Create the Order Document with embedded items
     const order = await Order.create({
       restaurantId: req.user.restaurantId,
       tableId: orderType === "DineIn" ? tableId : null,
       orderType,
+      items: verifiedItems,
       totalAmount: calculatedTotalAmount,
       discount,
       tax,
       finalAmount,
       paymentMode,
+      splitPayments: paymentMode === "Split" ? splitPayments : [],
       status: "Pending",
+      paymentStatus: paymentMode !== "Pending" ? "Paid" : "Unpaid",
       createdBy: req.user._id,
     });
 
-    const preparedOrderItems = orderItemsToInsert.map((item) => ({
-      ...item,
-      orderId: order._id,
-    }));
-    await OrderItem.insertMany(preparedOrderItems);
-
+    // 3. Lock Table immediately for DineIn
     if (orderType === "DineIn" && tableId) {
       await Table.findOneAndUpdate(
         { _id: tableId, restaurantId: req.user.restaurantId },
-        { status: "Occupied", currentOrderId: order._id },
+        { status: "Occupied" },
       );
     }
 
@@ -81,34 +82,15 @@ const createOrder = async (req, res) => {
   }
 };
 
-// --- LOOPHOLE 1 FIXED: MISSING ROUTE FOR KOT ---
-// @desc    Get all orders (Used by KOT to display active tickets)
-// @route   GET /api/orders
-// @access  Private
+// @desc    Get all orders (Clean NoSQL approach)
 const getOrders = async (req, res) => {
   try {
-    // 1. Fetch all orders for this restaurant (newest first)
     const orders = await Order.find({ restaurantId: req.user.restaurantId })
       .populate("tableId", "tableNumber capacity")
+      .populate("createdBy", "name")
       .sort({ createdAt: -1 });
 
-    // 2. Fetch all related order items so the KOT can display the dish names
-    const orderIds = orders.map((o) => o._id);
-    const orderItems = await OrderItem.find({
-      orderId: { $in: orderIds },
-    }).populate("menuItemId", "name price image");
-
-    // 3. Attach the items array directly into the order object for the frontend
-    const populatedOrders = orders.map((order) => {
-      return {
-        ...order.toObject(),
-        items: orderItems.filter(
-          (item) => item.orderId.toString() === order._id.toString(),
-        ),
-      };
-    });
-
-    res.json(populatedOrders);
+    res.json(orders);
   } catch (error) {
     res
       .status(500)
@@ -117,8 +99,6 @@ const getOrders = async (req, res) => {
 };
 
 // @desc    Get single order details
-// @route   GET /api/orders/:id
-// @access  Private
 const getOrderById = async (req, res) => {
   const order = await Order.findOne({
     _id: req.params.id,
@@ -128,17 +108,10 @@ const getOrderById = async (req, res) => {
     .populate("createdBy", "name");
 
   if (!order) return res.status(404).json({ message: "Order not found" });
-  const orderItems = await OrderItem.find({ orderId: order._id }).populate(
-    "menuItemId",
-    "name image",
-  );
-
-  res.json({ order, orderItems });
+  res.json({ order });
 };
 
 // @desc    Update Order Status & Trigger Inventory
-// @route   PUT /api/orders/:id/status
-// @access  Private
 const updateOrderStatus = async (req, res) => {
   const { status, paymentStatus, paymentMode } = req.body;
   const order = await Order.findOne({
@@ -148,24 +121,20 @@ const updateOrderStatus = async (req, res) => {
 
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  // --- LOOPHOLE 2 FIXED: LOGIC BOMB IN AUTO-DEDUCT ---
-  // We MUST save the old status before updating it, otherwise the check fails!
   const previousStatus = order.status;
-
   if (status) order.status = status;
 
-  // Now it properly compares the NEW status against the OLD status
+  // Auto-Deduct Inventory logic
   if (status === "Preparing" && previousStatus !== "Preparing") {
     await deductInventoryForOrder(order._id, req.user.restaurantId);
   }
 
-  // Handle Payment Completion
+  // Handle Payment & Freeing the Table
   if (paymentStatus === "Paid") {
     order.paymentStatus = "Paid";
     order.paymentMode = paymentMode || order.paymentMode;
 
     if (order.tableId) {
-      const Table = require("../models/Table");
       await Table.findByIdAndUpdate(order.tableId, {
         status: "Available",
         currentOrderId: null,
@@ -177,24 +146,24 @@ const updateOrderStatus = async (req, res) => {
   res.json(updatedOrder);
 };
 
+// @desc    Get Kitchen Orders (Lightning Fast now due to embedded items)
 const getKitchenOrders = async (req, res) => {
   try {
     const activeOrders = await Order.find({
       restaurantId: req.user.restaurantId,
       status: { $in: ["Pending", "Received", "Preparing", "Ready"] },
     })
-      // 🔥 FIX 1: Changed to 'tableId' so it matches your Schema
       .populate("tableId", "tableNumber")
       .sort({ createdAt: 1 });
 
     res.json(activeOrders);
   } catch (error) {
-    console.error("Kitchen Fetch Error:", error);
     res.status(500).json({ message: "Failed to fetch kitchen orders" });
   }
 };
 
 // @desc    Update Kitchen Order Status
+// @desc    Update Kitchen Order Status & Trigger Inventory
 // @route   PUT /api/orders/:id/kitchen-status
 // @access  Private (Owner, Manager, Kitchen)
 const updateKitchenStatus = async (req, res) => {
@@ -202,21 +171,31 @@ const updateKitchenStatus = async (req, res) => {
     const { status } = req.body;
 
     if (!["Preparing", "Ready"].includes(status)) {
-      return res.status(403).json({
-        message: "Kitchen can only mark orders as Preparing or Ready.",
-      });
+      return res
+        .status(403)
+        .json({
+          message: "Kitchen can only mark orders as Preparing or Ready.",
+        });
     }
 
-    const order = await Order.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user.restaurantId },
-      { $set: { status: status } },
-      // 🔥 FIX 2: Fixed the Mongoose deprecation warning from your terminal
-      { returnDocument: "after" },
-    )
-      // 🔥 FIX 3: Changed to 'tableId' here too!
-      .populate("tableId", "tableNumber");
+    // 1. Find the order FIRST so we can check its previous status
+    const order = await Order.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    }).populate("tableId", "tableNumber");
 
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const previousStatus = order.status;
+    order.status = status;
+
+    // 🔥 THE LOOPHOLE FIX: Trigger Auto-Deduct when the Chef starts cooking!
+    if (status === "Preparing" && previousStatus !== "Preparing") {
+      await deductInventoryForOrder(order._id, req.user.restaurantId);
+    }
+
+    // Save the order to the database
+    await order.save();
 
     res.json(order);
   } catch (error) {
@@ -227,7 +206,70 @@ const updateKitchenStatus = async (req, res) => {
   }
 };
 
-// Make sure getOrders is exported!
+// @desc    Get the running (Unpaid) order for a specific table
+// @route   GET /api/orders/table/:tableId
+// @access  Private
+const getRunningOrderByTable = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      tableId: req.params.tableId,
+      restaurantId: req.user.restaurantId,
+      paymentStatus: "Unpaid", // Only look for running orders
+    });
+
+    if (!order)
+      return res
+        .status(404)
+        .json({ message: "No running order found for this table" });
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching table order" });
+  }
+};
+
+// @desc    Settle an Unpaid Order & Clear the Table
+// @route   PUT /api/orders/:id/settle
+// @access  Private (Cashier, Manager, Owner)
+const settleOrder = async (req, res) => {
+  const { paymentMode, splitPayments, discount, tax, finalAmount } = req.body;
+
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (order.paymentStatus === "Paid")
+      return res.status(400).json({ message: "Order already paid" });
+
+    // Update the financials and mark as Paid
+    order.paymentStatus = "Paid";
+    order.paymentMode = paymentMode;
+    order.splitPayments = paymentMode === "Split" ? splitPayments : [];
+
+    // Optional: Allow cashier to apply last-minute discounts
+    if (discount !== undefined) {
+      order.discount = discount;
+      order.tax = tax;
+      order.finalAmount = finalAmount;
+    }
+
+    await order.save();
+
+    // 🔥 LOOPHOLE 1 COMPLETELY CLOSED: The software clears the table automatically
+    if (order.tableId) {
+      const Table = require("../models/Table");
+      await Table.findByIdAndUpdate(order.tableId, { status: "Available" });
+    }
+
+    res.json({ message: "Bill Settled and Table Cleared", order });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to settle bill", error: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getOrders,
@@ -235,4 +277,6 @@ module.exports = {
   updateOrderStatus,
   getKitchenOrders,
   updateKitchenStatus,
+  settleOrder,
+  getRunningOrderByTable,
 };

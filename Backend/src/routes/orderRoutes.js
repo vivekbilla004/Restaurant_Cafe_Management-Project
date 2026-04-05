@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 
-// 1. Consolidated Imports
 const {
   createOrder,
   getOrders,
@@ -9,6 +8,8 @@ const {
   updateOrderStatus,
   getKitchenOrders,
   updateKitchenStatus,
+  settleOrder,
+  getRunningOrderByTable,
 } = require("../controllers/orderController");
 
 const {
@@ -27,6 +28,16 @@ router.get(
   protect,
   authorize("Owner", "Manager", "Kitchen"),
   getKitchenOrders,
+);
+
+// Get running order by table (for quick access on POS)
+// 🔥 FIX: Moved this ABOVE the /:id routes!
+router.get(
+  "/table/:tableId",
+  protect,
+  checkSubscription,
+  authorize("Owner", "Manager", "Cashier", "Waiter"),
+  getRunningOrderByTable,
 );
 
 // General - Get all or Create
@@ -53,7 +64,6 @@ router.put(
 );
 
 // POS/Floor - Update main order status (Paid, Cancelled, etc)
-// 🔒 LOOPHOLE CLOSED: Kitchen staff cannot touch this route anymore!
 router.put(
   "/:id/status",
   protect,
@@ -62,12 +72,22 @@ router.put(
   updateOrderStatus,
 );
 
+// Settle the bill and clear the table
+router.put(
+  "/:id/settle",
+  protect,
+  checkSubscription,
+  authorize("Owner", "Manager", "Cashier"),
+  settleOrder,
+);
+
 // View specific order details
+// 🔥 This wildcard route must sit below all other GET routes!
 router.get(
   "/:id",
   protect,
   checkSubscription,
-  authorize("Owner", "Manager", "Cashier", "Waiter"), // Waiters need to see order details too!
+  authorize("Owner", "Manager", "Cashier", "Waiter"),
   getOrderById,
 );
 
