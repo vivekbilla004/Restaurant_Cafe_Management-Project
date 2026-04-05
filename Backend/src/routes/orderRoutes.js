@@ -49,7 +49,7 @@ router
     authorize("Owner", "Manager", "Cashier", "Waiter"),
     createOrder,
   )
-  .get(protect, checkSubscription, authorize("Owner", "Manager"), getOrders);
+  .get(protect, checkSubscription, authorize("Owner", "Manager", "Cashier"), getOrders);
 
 // ==========================================
 // 2. DYNAMIC ROUTES WITH /:id (MUST GO AT THE BOTTOM)

@@ -10,7 +10,7 @@ const {
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 // 🟢 FLOOR OPS (Waiters Allowed)
-router.get("/", protect, authorize("Owner", "Manager", "Waiter"), getTables);
+router.get("/", protect, authorize("Owner", "Manager", "Waiter", "Cashier"), getTables);
 router.put(
   "/:id/status",
   protect,

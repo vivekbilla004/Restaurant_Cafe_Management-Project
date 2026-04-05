@@ -78,7 +78,7 @@ function App() {
                 <Route
                   path="/menu"
                   element={
-                    <RoleRoute allowedRoles={["Owner"]}>
+                    <RoleRoute allowedRoles={["Owner", "Manager"]}>
                       <MenuManager />
                     </RoleRoute>
                   }
@@ -86,7 +86,7 @@ function App() {
                 <Route
                   path="/orders"
                   element={
-                    <RoleRoute allowedRoles={["Owner", "Manager"]}>
+                    <RoleRoute allowedRoles={["Owner", "Manager","Cashier"]}>
                       <OrdersManager />
                     </RoleRoute>
                   }
@@ -102,7 +102,7 @@ function App() {
                 <Route
                   path="/inventory"
                   element={
-                    <RoleRoute allowedRoles={["Owner"]}>
+                    <RoleRoute allowedRoles={["Owner","Manager"]}>
                       <InventoryManager />
                     </RoleRoute>
                   }
@@ -110,7 +110,7 @@ function App() {
                 <Route
                   path="/expenses"
                   element={
-                    <RoleRoute allowedRoles={["Owner", "Manager"]}>
+                    <RoleRoute allowedRoles={["Owner"]}>
                       <ExpenseManager />
                     </RoleRoute>
                   }
@@ -126,7 +126,9 @@ function App() {
                 <Route
                   path="/tables"
                   element={
-                    <RoleRoute allowedRoles={["Owner", "Waiter"]}>
+                    <RoleRoute
+                      allowedRoles={["Owner", "Waiter", "Manager", "Cashier"]}
+                    >
                       <TablesManager />
                     </RoleRoute>
                   }

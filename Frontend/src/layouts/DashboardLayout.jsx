@@ -89,14 +89,24 @@ export default function DashboardLayout() {
       roles: ["Owner", "Manager", "Cashier", "Kitchen"],
     },
     { name: "Menu", path: "/menu", icon: UtensilsCrossed, roles: ["Owner"] },
-    { name: "Tables", path: "/tables", icon: Grid, roles: ["Owner", "Waiter"] },
-    { name: "Inventory", path: "/inventory", icon: Package, roles: ["Owner"] },
+    {
+      name: "Tables",
+      path: "/tables",
+      icon: Grid,
+      roles: ["Owner", "Waiter", "Cashier", "Manager"],
+    },
+    {
+      name: "Inventory",
+      path: "/inventory",
+      icon: Package,
+      roles: ["Owner", "Manager"],
+    },
     { name: "Staff", path: "/staff", icon: Users, roles: ["Owner"] },
     {
       name: "Expenses",
       path: "/expenses",
       icon: Receipt,
-      roles: ["Owner", "Manager"],
+      roles: ["Owner"],
     },
     {
       name: "Reports",
