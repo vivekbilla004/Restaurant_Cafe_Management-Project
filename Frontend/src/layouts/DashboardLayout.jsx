@@ -120,12 +120,12 @@ export default function DashboardLayout() {
       icon: CreditCard,
       roles: ["Owner"],
     },
-    {
-      name: "Settings",
-      path: "/settings",
-      icon: Settings,
-      roles: ["Owner", "Manager"],
-    },
+    // {
+    //   name: "Settings",
+    //   path: "/settings",
+    //   icon: Settings,
+    //   roles: ["Owner", "Manager"],
+    // },
   ];
 
   const allowedMenuItems = menuItems.filter((item) =>
@@ -247,7 +247,7 @@ export default function DashboardLayout() {
 
             {/* USER PROFILE */}
             <div className="flex items-center gap-3 pl-4 border-l border-slate-100">
-              <div className="hidden md:text-right md:block">
+              <div className="text-right">
                 <p className="text-sm font-black text-slate-800 leading-none mb-1">
                   {user?.name || "User"}
                 </p>

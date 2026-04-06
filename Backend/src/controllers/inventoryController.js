@@ -62,8 +62,13 @@ const addStock = async (req, res) => {
     res.status(201).json(item);
   } catch (error) {
     // This will print the EXACT schema validation error in your terminal!
-    console.error("Inventory Add Error:", error); 
-    res.status(500).json({ message: "Failed to add stock and log expense", error: error.message });
+    console.error("Inventory Add Error:", error);
+    res
+      .status(500)
+      .json({
+        message: "Failed to add stock and log expense",
+        error: error.message,
+      });
   }
 };
 
@@ -117,11 +122,9 @@ const addRecipe = async (req, res) => {
   const { menuItemId, inventoryId, requiredQty } = req.body;
 
   if (!menuItemId || !inventoryId || requiredQty == null) {
-    return res
-      .status(400)
-      .json({
-        message: "menuItemId, inventoryId and requiredQty are required.",
-      });
+    return res.status(400).json({
+      message: "menuItemId, inventoryId and requiredQty are required.",
+    });
   }
 
   const existing = await Recipe.findOne({
@@ -136,12 +139,10 @@ const addRecipe = async (req, res) => {
       await existing.save();
       return res.status(200).json(existing);
     }
-    return res
-      .status(409)
-      .json({
-        message:
-          "Recipe already exists. Delete it first if you want to change it.",
-      });
+    return res.status(409).json({
+      message:
+        "Recipe already exists. Delete it first if you want to change it.",
+    });
   }
 
   const recipe = await Recipe.create({
