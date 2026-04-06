@@ -26,7 +26,9 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(cors()); // Allows your React frontend to communicate with this API
+app.use(cors({ origin: "*" }));
+// app.use(cors());
+// Allows your React frontend to communicate with this API
 app.use(express.json()); // Allows us to accept JSON data in the body
 
 // Mount Routes
