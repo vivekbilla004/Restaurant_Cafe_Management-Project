@@ -5,6 +5,7 @@ const {
   getInventory,
   addRecipe,
   getRecipes,
+  deleteStock
 } = require("../controllers/inventoryController");
 // Assuming you create a quick recipeController with standard CRUD operations
 const {
@@ -17,13 +18,25 @@ const {
 // Only Owners and Managers can manage physical stock [cite: 355-365]
 router
   .route("/")
-  .get(protect, checkSubscription, authorize("Owner", "Kitchen" ,"Manager"), getInventory) // Kitchen needs to see stock
-  .post(protect, checkSubscription, authorize("Owner" , "Manager"), addStock);
+  .get(
+    protect,
+    checkSubscription,
+    authorize("Owner", "Kitchen", "Manager"),
+    getInventory,
+  ) // Kitchen needs to see stock
+  .post(protect, checkSubscription, authorize("Owner", "Manager"), addStock);
 
 // Recipe mapping APIs
 router
   .route("/recipes")
-  .get(protect, checkSubscription, authorize("Owner", "Kitchen", "Manager"), getRecipes)
-  .post(protect, checkSubscription,  authorize("Owner"), addRecipe);
+  .get(
+    protect,
+    checkSubscription,
+    authorize("Owner", "Kitchen", "Manager"),
+    getRecipes,
+  )
+  .post(protect, checkSubscription, authorize("Owner"), addRecipe);
+
+router.delete("/:id", protect, authorize("Owner", "Manager"), deleteStock);
 
 module.exports = router;

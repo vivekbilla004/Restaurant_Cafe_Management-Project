@@ -63,12 +63,10 @@ const addStock = async (req, res) => {
   } catch (error) {
     // This will print the EXACT schema validation error in your terminal!
     console.error("Inventory Add Error:", error);
-    res
-      .status(500)
-      .json({
-        message: "Failed to add stock and log expense",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Failed to add stock and log expense",
+      error: error.message,
+    });
   }
 };
 
@@ -164,6 +162,26 @@ const getRecipes = async (req, res) => {
     .populate("inventoryId", "name unit");
   res.json(recipes);
 };
+const deleteStock = async (req, res) => {
+  try {
+    const item = await Inventory.findOneAndDelete({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
+
+    if (!item) return res.status(404).json({ message: "Item not found" });
+
+    // 🔥 THE SAFEGUARD: If we delete the Tomatoes, we must delete the "Add 2 Tomatoes to Pizza" rule!
+    await Recipe.deleteMany({
+      inventoryId: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
+
+    res.json({ message: "Stock and linked recipes deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete stock" });
+  }
+};
 
 module.exports = {
   addStock,
@@ -171,4 +189,5 @@ module.exports = {
   addRecipe,
   getRecipes,
   deductInventoryForOrder,
+  deleteStock,
 };
