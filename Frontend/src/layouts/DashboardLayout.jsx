@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store/AuthContext";
+import api from "../lib/api";
+import toast, { Toaster } from "react-hot-toast"; // 🔥 NEEDED FOR WAITER PINGS
 
 import {
   LayoutDashboard,
@@ -13,7 +15,6 @@ import {
   Receipt,
   LineChart,
   CreditCard,
-  Settings,
   LogOut,
   ChefHat,
   Menu as MenuIcon,
@@ -23,30 +24,94 @@ import {
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
-  // console.log("DEBUG USER OBJECT:", user);
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // --- REAL NOTIFICATION LOGIC ---
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      text: "Table 4 requested the bill",
-      time: "2 min ago",
-      unread: true,
-    },
-    {
-      id: 2,
-      text: "Stock low: Chicken Breast",
-      time: "10 min ago",
-      unread: true,
-    },
-  ]);
+  // --- 1. MANAGER ALERTS (The Red Bell) ---
+  const [notifications, setNotifications] = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const notifRef = useRef(null);
 
-  // Close dropdown when clicking outside
+  // --- 2. WAITER PINGS (The Memory Engine) ---
+  const activeOrdersRef = useRef([]);
+
+  const fetchRealTimeUpdates = async () => {
+    try {
+      // TASK A: Fetch Bell Alerts for Managers
+      if (user?.role === "Owner" || user?.role === "Manager") {
+        const notifRes = await api.get("/api/notifications");
+        const formatted = notifRes.data.map((n) => ({
+          id: n._id,
+          text: n.message,
+          title: n.title,
+          type: n.type,
+          time: new Date(n.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          unread: !n.isRead,
+        }));
+        setNotifications(formatted);
+      }
+
+      // TASK B: Fetch Pings for Waiters & Floor Staff
+      if (["Waiter", "Manager", "Owner"].includes(user?.role)) {
+        const orderRes = await api.get("/api/orders"); // Fetch recent orders
+        const currentOrders = orderRes.data;
+
+        // If we have previous memory, compare them!
+        if (activeOrdersRef.current.length > 0) {
+          currentOrders.forEach((newOrder) => {
+            const oldOrder = activeOrdersRef.current.find(
+              (o) => o._id === newOrder._id,
+            );
+            if (oldOrder) {
+              // 🟢 PING 1: Kitchen marked as Ready!
+              if (newOrder.status === "Ready" && oldOrder.status !== "Ready") {
+                toast.success(
+                  `🥘 FOOD READY: Table ${newOrder.tableId?.tableNumber || newOrder.orderType}`,
+                  {
+                    duration: 6000,
+                    position: "top-center",
+                    style: { border: "2px solid #22c55e", fontWeight: "bold" },
+                  },
+                );
+              }
+
+              // 🟢 PING 2: Cashier settled the bill!
+              if (
+                newOrder.paymentStatus === "Paid" &&
+                oldOrder.paymentStatus !== "Paid"
+              ) {
+                toast.success(
+                  `🧹 TABLE CLEARED: Table ${newOrder.tableId?.tableNumber || newOrder.orderType} is paid!`,
+                  {
+                    duration: 6000,
+                    position: "top-center",
+                    style: { border: "2px solid #3b82f6", fontWeight: "bold" },
+                  },
+                );
+              }
+            }
+          });
+        }
+        // Save the new state into memory for the next tick
+        activeOrdersRef.current = currentOrders;
+      }
+    } catch (err) {
+      console.error("Live Sync Failed");
+    }
+  };
+
+  useEffect(() => {
+    fetchRealTimeUpdates();
+    // 🔥 POLL EVERY 5 SECONDS
+    const interval = setInterval(fetchRealTimeUpdates, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Handle clicking outside the Bell Dropdown
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target))
@@ -56,8 +121,23 @@ export default function DashboardLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const unreadCount = notifications.filter((n) => n.unread).length;
+  const clearNotification = async (id) => {
+    try {
+      await api.put(`/api/notifications/${id}/read`);
+      fetchRealTimeUpdates();
+    } catch (err) {
+      console.error("Failed to clear notification");
+    }
+  };
 
+  const clearAll = async () => {
+    for (const n of notifications) {
+      await api.put(`/api/notifications/${n.id}/read`);
+    }
+    setNotifications([]);
+  };
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -88,7 +168,12 @@ export default function DashboardLayout() {
       icon: ListOrdered,
       roles: ["Owner", "Manager", "Cashier", "Kitchen"],
     },
-    { name: "Menu", path: "/menu", icon: UtensilsCrossed, roles: ["Owner"] },
+    {
+      name: "Menu",
+      path: "/menu",
+      icon: UtensilsCrossed,
+      roles: ["Owner", "Manager"],
+    },
     {
       name: "Tables",
       path: "/tables",
@@ -102,12 +187,7 @@ export default function DashboardLayout() {
       roles: ["Owner", "Manager"],
     },
     { name: "Staff", path: "/staff", icon: Users, roles: ["Owner"] },
-    {
-      name: "Expenses",
-      path: "/expenses",
-      icon: Receipt,
-      roles: ["Owner"],
-    },
+    { name: "Expenses", path: "/expenses", icon: Receipt, roles: ["Owner"] },
     {
       name: "Reports",
       path: "/reports",
@@ -120,26 +200,20 @@ export default function DashboardLayout() {
       icon: CreditCard,
       roles: ["Owner"],
     },
-    // {
-    //   name: "Settings",
-    //   path: "/settings",
-    //   icon: Settings,
-    //   roles: ["Owner", "Manager"],
-    // },
   ];
 
   const allowedMenuItems = menuItems.filter((item) =>
     item.roles.includes(user?.role),
   );
-
-  // Dynamic Header Title based on path
   const currentPathName =
     menuItems.find((item) => item.path === location.pathname)?.name || "Omicra";
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+      <Toaster />{" "}
+      {/* 🔥 Added Toaster so Waiter Pings show up anywhere in the app! */}
       {/* --- DESKTOP SIDEBAR --- */}
-      <aside className="hidden lg:flex flex-col w-64 bg-slate-900 text-white shadow-xl">
+      <aside className="hidden lg:flex flex-col w-64 bg-slate-900 text-white shadow-xl z-20">
         <div className="flex items-center gap-3 px-6 h-20 border-b border-slate-800">
           <div className="bg-blue-600 p-1.5 rounded-lg">
             <UtensilsCrossed size={20} className="text-white" />
@@ -153,11 +227,7 @@ export default function DashboardLayout() {
               key={item.name}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 group ${
-                  isActive
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`
+                `flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 group ${isActive ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`
               }
             >
               <item.icon className="mr-3 h-5 w-5 opacity-80" />
@@ -175,11 +245,10 @@ export default function DashboardLayout() {
           </button>
         </div>
       </aside>
-
       {/* --- MAIN CONTENT --- */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative">
         {/* TOP NAVBAR */}
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0">
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0 z-10">
           <div className="flex items-center gap-4">
             <button
               className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
@@ -193,57 +262,72 @@ export default function DashboardLayout() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-6">
-            {/* NOTIFICATIONS DROPDOWN */}
-            <div className="relative" ref={notifRef}>
-              <button
-                className="p-2 text-slate-500 hover:bg-slate-50 rounded-full relative transition-colors"
-                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
-              >
-                <Bell size={22} />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 h-4 w-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {showNotifDropdown && (
-                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50">
-                  <div className="p-4 border-b border-slate-50 flex justify-between items-center">
-                    <span className="font-bold text-slate-800">
-                      Notifications
+            {/* 🔴 MANAGER ALERTS DROPDOWN */}
+            {["Owner", "Manager"].includes(user?.role) && (
+              <div className="relative" ref={notifRef}>
+                <button
+                  className="p-2 text-slate-500 hover:bg-slate-50 rounded-full relative transition-colors"
+                  onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                >
+                  <Bell size={22} />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 h-4 w-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+                      {unreadCount}
                     </span>
-                    <button
-                      className="text-xs text-blue-600 font-bold"
-                      onClick={() => setNotifications([])}
-                    >
-                      Clear All
-                    </button>
-                  </div>
-                  <div className="max-h-96 overflow-y-auto">
-                    {notifications.length > 0 ? (
-                      notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          className="p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer"
-                        >
-                          <p className="text-sm text-slate-700 font-medium">
-                            {n.text}
-                          </p>
-                          <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">
-                            {n.time}
-                          </p>
+                  )}
+                </button>
+
+                {showNotifDropdown && (
+                  <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50">
+                    <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                      <span className="font-black text-slate-800">
+                        System Alerts
+                      </span>
+                      <button
+                        className="text-xs text-blue-600 font-bold hover:underline"
+                        onClick={clearAll}
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                      {notifications.length > 0 ? (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-start gap-3 transition"
+                          >
+                            <div className="flex-1">
+                              <p
+                                className={`text-[10px] font-black uppercase tracking-widest mb-1 ${n.type === "OutOfStock" ? "text-red-500" : n.type === "LowStock" ? "text-amber-500" : "text-blue-500"}`}
+                              >
+                                {n.title}
+                              </p>
+                              <p className="text-sm text-slate-700 font-bold leading-tight mb-1">
+                                {n.text}
+                              </p>
+                              <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider">
+                                {n.time}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => clearNotification(n.id)}
+                              className="p-1.5 bg-white text-slate-400 hover:text-red-500 rounded-lg shadow-sm border border-slate-100 transition"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-10 text-center text-slate-400 text-sm font-bold uppercase tracking-widest">
+                          No Active Alerts
                         </div>
-                      ))
-                    ) : (
-                      <div className="p-8 text-center text-slate-400 text-sm">
-                        No new alerts
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* USER PROFILE */}
             <div className="flex items-center gap-3 pl-4 border-l border-slate-100">
@@ -263,25 +347,21 @@ export default function DashboardLayout() {
         </header>
 
         {/* PAGE CONTENT */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8 pb-24 lg:pb-8 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8 pb-24 lg:pb-8 custom-scrollbar bg-slate-50">
           <Outlet />
         </main>
       </div>
-
       {/* --- TABLET/MOBILE BOTTOM NAV --- */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 px-2 py-1 z-40">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 px-2 py-1 z-40 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-16">
           {allowedMenuItems.slice(0, 4).map((item) => (
             <NavLink
               key={item.name}
               to={item.path}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all ${
-                  isActive ? "text-blue-600 scale-110" : "text-slate-400"
-                }`
+                `flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all ${isActive ? "text-blue-600 scale-110" : "text-slate-400"}`
               }
             >
-              {/* 🔥 FIX: We use a function here to get the 'isActive' state for the icon too */}
               {({ isActive }) => (
                 <>
                   <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
@@ -292,7 +372,6 @@ export default function DashboardLayout() {
               )}
             </NavLink>
           ))}
-
           <button
             onClick={() => setMobileMenuOpen(true)}
             className="flex flex-col items-center justify-center flex-1 text-slate-400 gap-1"
@@ -304,7 +383,6 @@ export default function DashboardLayout() {
           </button>
         </div>
       </div>
-
       {/* --- MOBILE OVERLAY DRAWER --- */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-[60] flex">
@@ -329,11 +407,7 @@ export default function DashboardLayout() {
                   to={item.path}
                   onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }) =>
-                    `flex items-center p-3 rounded-xl font-bold transition-all ${
-                      isActive
-                        ? "bg-blue-600 text-white"
-                        : "text-slate-400 hover:bg-slate-800"
-                    }`
+                    `flex items-center p-3 rounded-xl font-bold transition-all ${isActive ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800"}`
                   }
                 >
                   <item.icon className="mr-4 h-5 w-5" /> {item.name}

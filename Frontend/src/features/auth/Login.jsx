@@ -35,7 +35,7 @@ export default function Login() {
           } else if (role === "Owner" || role === "Manager") {
             navigate("/dashboard");
           } else if (role === "Cashier" || role === "Waiter") {
-            navigate("/orders");
+            navigate("/tables");
           } else if (role === "Waiter") {
             navigate("/tables");
           } else if (role === "Kitchen") {

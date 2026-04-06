@@ -1,4 +1,7 @@
 const Order = require("../models/Order");
+const Inventory = require("../models/Inventory"); // 🔥 NEEDED FOR INVENTORY MATH
+const Recipe = require("../models/Recipe"); // 🔥 THIS IS THE ONE CRASHING IT
+const Notification = require("../models/Notification"); // 🔥 NEEDED FOR THE BELL ALERTS
 const Table = require("../models/Table");
 const MenuItem = require("../models/MenuItem");
 const { deductInventoryForOrder } = require("./inventoryController");
@@ -169,40 +172,89 @@ const getKitchenOrders = async (req, res) => {
 const updateKitchenStatus = async (req, res) => {
   try {
     const { status } = req.body;
+    const restaurantId = req.user.restaurantId;
 
-    if (!["Preparing", "Ready"].includes(status)) {
-      return res
-        .status(403)
-        .json({
-          message: "Kitchen can only mark orders as Preparing or Ready.",
-        });
-    }
-
-    // 1. Find the order FIRST so we can check its previous status
-    const order = await Order.findOne({
-      _id: req.params.id,
-      restaurantId: req.user.restaurantId,
-    }).populate("tableId", "tableNumber");
-
+    const order = await Order.findOne({ _id: req.params.id, restaurantId });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const previousStatus = order.status;
-    order.status = status;
+    // ==========================================
+    // THE INVENTORY ENGINE (Triggered when cooking starts)
+    // ==========================================
+    if (status === "Preparing" && order.status !== "Preparing") {
+      // 1. Calculate how much raw material this order needs
+      const requiredMaterials = {};
 
-    // 🔥 THE LOOPHOLE FIX: Trigger Auto-Deduct when the Chef starts cooking!
-    if (status === "Preparing" && previousStatus !== "Preparing") {
-      await deductInventoryForOrder(order._id, req.user.restaurantId);
+      for (const item of order.items) {
+        // Find the recipe ingredients for this menu item
+        const recipes = await Recipe.find({
+          menuItemId: item.menuItemId,
+          restaurantId,
+          isActive: true,
+        });
+
+        for (const recipe of recipes) {
+          const totalNeeded = recipe.requiredQty * item.quantity;
+          if (!requiredMaterials[recipe.inventoryId]) {
+            requiredMaterials[recipe.inventoryId] = 0;
+          }
+          requiredMaterials[recipe.inventoryId] += totalNeeded;
+        }
+      }
+
+      // 2. Fetch the current stock levels from the fridge/pantry
+      const inventoryItems = await Inventory.find({
+        _id: { $in: Object.keys(requiredMaterials) },
+        restaurantId,
+      });
+
+      // 3. CHECK FOR ZERO STOCK (The Hard Stop)
+      for (const invItem of inventoryItems) {
+        const needed = requiredMaterials[invItem._id];
+
+        // 🚨 OUT OF STOCK CRISIS!
+        if (invItem.quantity < needed) {
+          // Fire a Red Alert to the Manager's Bell Icon!
+          await Notification.create({
+            restaurantId,
+            title: "CRITICAL: Out of Stock",
+            message: `Kitchen tried to cook Order #${order._id.toString().slice(-4)} but ran out of ${invItem.name}.`,
+            type: "OutOfStock",
+          });
+
+          // Block the Kitchen and trigger the Red Modal in KOTScreen.jsx
+          return res.status(400).json({
+            code: "OUT_OF_STOCK",
+            message: `Not enough ${invItem.name}. You need ${needed} ${invItem.unit}, but only have ${invItem.quantity} ${invItem.unit} left.`,
+          });
+        }
+      }
+
+      // 4. WE HAVE ENOUGH FOOD! Deduct the inventory.
+      for (const invItem of inventoryItems) {
+        const needed = requiredMaterials[invItem._id];
+        invItem.quantity -= needed;
+        await invItem.save();
+
+        // ⚠️ LOW STOCK WARNING: Alert the Manager to buy more!
+        if (invItem.quantity <= invItem.minStockLevel) {
+          await Notification.create({
+            restaurantId,
+            title: "Low Stock Alert",
+            message: `${invItem.name} is running low. Only ${invItem.quantity} ${invItem.unit} remaining.`,
+            type: "LowStock",
+          });
+        }
+      }
     }
 
-    // Save the order to the database
+    // 5. Update the actual order status
+    order.status = status;
     await order.save();
 
-    res.json(order);
+    res.json({ message: `Order marked as ${status}`, order });
   } catch (error) {
-    console.error("Kitchen Status Update Error:", error.message);
-    res
-      .status(500)
-      .json({ message: "Failed to update status", error: error.message });
+    console.error("Kitchen Status Error:", error);
+    res.status(500).json({ message: "Failed to update status" });
   }
 };
 
