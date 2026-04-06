@@ -13,7 +13,9 @@ const addStaff = async (req, res) => {
     if (email) {
       const userExists = await User.findOne({ email });
       if (userExists) {
-        return res.status(400).json({ message: 'Email is already registered. Choose another.' });
+        return res
+          .status(400)
+          .json({ message: "Email is already registered. Choose another." });
       }
     }
 
@@ -21,38 +23,41 @@ const addStaff = async (req, res) => {
     const staff = await Staff.create({
       restaurantId: req.user.restaurantId,
       name,
-      role, 
+      role,
       salary: Number(salary),
-      phone: phone || 'N/A'
+      phone: phone || "N/A",
     });
 
     let loginCreated = false;
-    
+
     // Create the Login Account in the User Collection
     if (email && password) {
       await User.create({
         restaurantId: req.user.restaurantId,
         name,
         email,
-        password, 
-        role
+        password,
+        role,
       });
       loginCreated = true;
-      
+
       // Save the email to the staff record so we can delete their login later if they are fired
       staff.email = email;
       await staff.save();
     }
 
-    res.status(201).json({ 
-      message: loginCreated ? 'Staff and Login created successfully!' : 'Staff created (No login access)', 
+    res.status(201).json({
+      message: loginCreated
+        ? "Staff and Login created successfully!"
+        : "Staff created (No login access)",
       staff,
-      loginCreated
+      loginCreated,
     });
-
   } catch (error) {
     console.error("Add Staff Error:", error);
-    res.status(500).json({ message: "Failed to add staff", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Failed to add staff", error: error.message });
   }
 };
 
@@ -61,15 +66,21 @@ const addStaff = async (req, res) => {
 // @access  Private (Owner/Manager)
 const markAttendance = async (req, res) => {
   const { date, status } = req.body;
-  const staff = await Staff.findOne({ _id: req.params.id, restaurantId: req.user.restaurantId });
+  const staff = await Staff.findOne({
+    _id: req.params.id,
+    restaurantId: req.user.restaurantId,
+  });
 
-  if (!staff) return res.status(404).json({ message: "Staff member not found" });
+  if (!staff)
+    return res.status(404).json({ message: "Staff member not found" });
 
   const normalizedDate = new Date(date).setHours(0, 0, 0, 0);
-  const existingRecord = staff.attendance.find(a => new Date(a.date).setHours(0, 0, 0, 0) === normalizedDate);
+  const existingRecord = staff.attendance.find(
+    (a) => new Date(a.date).setHours(0, 0, 0, 0) === normalizedDate,
+  );
 
   if (existingRecord) {
-    existingRecord.status = status; 
+    existingRecord.status = status;
   } else {
     staff.attendance.push({ date: new Date(date), status });
   }
@@ -82,12 +93,16 @@ const markAttendance = async (req, res) => {
 // @route   GET /api/staff
 // @access  Private (Owner/Manager)
 const getStaffList = async (req, res) => {
-  const staffMembers = await Staff.find({ restaurantId: req.user.restaurantId, isActive: true });
+  const staffMembers = await Staff.find({
+    restaurantId: req.user.restaurantId,
+    isActive: true,
+  });
   const currentMonth = new Date().getMonth();
 
   const staffWithStats = staffMembers.map((staff) => {
     const daysPresent = staff.attendance.filter(
-      (a) => a.status === "Present" && new Date(a.date).getMonth() === currentMonth,
+      (a) =>
+        a.status === "Present" && new Date(a.date).getMonth() === currentMonth,
     ).length;
 
     return {
@@ -107,20 +122,32 @@ const processPayroll = async (req, res) => {
   try {
     const { month, year } = req.body; // 🔥 LOOPHOLE 2: We ignore payoutAmount from the frontend entirely!
 
-    const staff = await Staff.findOne({ _id: req.params.id, restaurantId: req.user.restaurantId });
+    const staff = await Staff.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
     // 🔥 LOOPHOLE 2 & 4: STRICT BACKEND MATH (Fixes the "Absent" bug)
     // We explicitly count how many "Present" days exist for the requested month
-    const daysPresent = staff.attendance.filter(a => {
+    const daysPresent = staff.attendance.filter((a) => {
       const d = new Date(a.date);
-      return a.status === "Present" && (d.getMonth() + 1) === Number(month) && d.getFullYear() === Number(year);
+      return (
+        a.status === "Present" &&
+        d.getMonth() + 1 === Number(month) &&
+        d.getFullYear() === Number(year)
+      );
     }).length;
 
     const calculatedPayout = Math.round((staff.salary / 30) * daysPresent);
 
     if (calculatedPayout <= 0) {
-      return res.status(400).json({ message: "Payout is zero. This employee has no 'Present' days this month." });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Payout is zero. This employee has no 'Present' days this month.",
+        });
     }
 
     // 🔥 LOOPHOLE 1: DOUBLE SALARY CHECK
@@ -128,11 +155,15 @@ const processPayroll = async (req, res) => {
     const existingExpense = await Expense.findOne({
       restaurantId: req.user.restaurantId,
       category: "Salary",
-      title: titleString
+      title: titleString,
     });
 
     if (existingExpense) {
-      return res.status(400).json({ message: `Duplicate! You already paid ${staff.name} for ${month}/${year}.` });
+      return res
+        .status(400)
+        .json({
+          message: `Duplicate! You already paid ${staff.name} for ${month}/${year}.`,
+        });
     }
 
     // Create Expense safely
@@ -152,7 +183,9 @@ const processPayroll = async (req, res) => {
     });
   } catch (error) {
     console.error("Payroll Error:", error);
-    res.status(500).json({ message: "Failed to process payroll", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Failed to process payroll", error: error.message });
   }
 };
 
@@ -162,12 +195,18 @@ const processPayroll = async (req, res) => {
 // @access  Private (Owner)
 const removeStaff = async (req, res) => {
   try {
-    const staff = await Staff.findOne({ _id: req.params.id, restaurantId: req.user.restaurantId });
+    const staff = await Staff.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
     // 1. If they have an email, find and delete their system login!
     if (staff.email) {
-      await User.findOneAndDelete({ email: staff.email, restaurantId: req.user.restaurantId });
+      await User.findOneAndDelete({
+        email: staff.email,
+        restaurantId: req.user.restaurantId,
+      });
     }
 
     // 2. Delete the HR record
@@ -179,4 +218,10 @@ const removeStaff = async (req, res) => {
   }
 };
 
-module.exports = { addStaff, markAttendance, getStaffList, processPayroll, removeStaff };
+module.exports = {
+  addStaff,
+  markAttendance,
+  getStaffList,
+  processPayroll,
+  removeStaff,
+};
