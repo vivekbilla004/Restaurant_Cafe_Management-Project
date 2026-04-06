@@ -235,17 +235,31 @@ const updateKitchenStatus = async (req, res) => {
         invItem.quantity -= needed;
         await invItem.save();
 
+        // 🔥 FIX: Added fallback to 5! If minStockLevel is missing, it alerts when stock hits 5.
+        const minimumLevel = invItem.minStockLevel || 5; 
+
         // ⚠️ LOW STOCK WARNING: Alert the Manager to buy more!
-        if (invItem.quantity <= invItem.minStockLevel) {
-          await Notification.create({
-            restaurantId,
-            title: "Low Stock Alert",
-            message: `${invItem.name} is running low. Only ${invItem.quantity} ${invItem.unit} remaining.`,
-            type: "LowStock",
+        if (invItem.quantity <= minimumLevel && invItem.quantity > 0) {
+          
+          // Optional: Check if a low stock alert already exists today to prevent spamming
+          const existingAlert = await Notification.findOne({
+             restaurantId,
+             type: "LowStock",
+             title: { $regex: invItem.name },
+             isRead: false
           });
+
+          if (!existingAlert) {
+            await Notification.create({
+              restaurantId,
+              title: "Low Stock Alert",
+              message: `${invItem.name} is running low. Only ${invItem.quantity} ${invItem.unit} remaining.`,
+              type: "LowStock"
+            });
+          }
         }
-      }
     }
+  }
 
     // 5. Update the actual order status
     order.status = status;
