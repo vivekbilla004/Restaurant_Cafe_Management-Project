@@ -1,14 +1,13 @@
 const Order = require("../models/Order");
-const Inventory = require("../models/Inventory"); // 🔥 NEEDED FOR INVENTORY MATH
-const Recipe = require("../models/Recipe"); // 🔥 THIS IS THE ONE CRASHING IT
-const Notification = require("../models/Notification"); // 🔥 NEEDED FOR THE BELL ALERTS
+const Inventory = require("../models/Inventory");
+const Recipe = require("../models/Recipe");
+const Notification = require("../models/Notification");
 const Table = require("../models/Table");
 const MenuItem = require("../models/MenuItem");
 const { deductInventoryForOrder } = require("./inventoryController");
 
 // @desc    Create new order & order items
 // @route   POST /api/orders
-// @access  Private
 const createOrder = async (req, res) => {
   const {
     tableId,
@@ -27,7 +26,6 @@ const createOrder = async (req, res) => {
     let calculatedTotalAmount = 0;
     const verifiedItems = [];
 
-    // 1. Verify and Snapshot items from DB
     for (const item of items) {
       const menuItem = await MenuItem.findOne({
         _id: item.menuItemId,
@@ -41,8 +39,8 @@ const createOrder = async (req, res) => {
 
       verifiedItems.push({
         menuItemId: menuItem._id,
-        name: menuItem.name, // 🔥 SNAPSHOT: Name secured
-        price: menuItem.price, // 🔥 SNAPSHOT: Price secured
+        name: menuItem.name,
+        price: menuItem.price,
         quantity: item.quantity,
         total: itemTotal,
       });
@@ -50,7 +48,6 @@ const createOrder = async (req, res) => {
 
     const finalAmount = calculatedTotalAmount - discount + tax;
 
-    // 2. Create the Order Document with embedded items
     const order = await Order.create({
       restaurantId: req.user.restaurantId,
       tableId: orderType === "DineIn" ? tableId : null,
@@ -67,7 +64,6 @@ const createOrder = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    // 3. Lock Table immediately for DineIn
     if (orderType === "DineIn" && tableId) {
       await Table.findOneAndUpdate(
         { _id: tableId, restaurantId: req.user.restaurantId },
@@ -85,7 +81,7 @@ const createOrder = async (req, res) => {
   }
 };
 
-// @desc    Get all orders (Clean NoSQL approach)
+// @desc    Get all orders
 const getOrders = async (req, res) => {
   try {
     const orders = await Order.find({ restaurantId: req.user.restaurantId })
@@ -103,53 +99,61 @@ const getOrders = async (req, res) => {
 
 // @desc    Get single order details
 const getOrderById = async (req, res) => {
-  const order = await Order.findOne({
-    _id: req.params.id,
-    restaurantId: req.user.restaurantId,
-  })
-    .populate("tableId", "tableNumber")
-    .populate("createdBy", "name");
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    })
+      .populate("tableId", "tableNumber")
+      .populate("createdBy", "name");
 
-  if (!order) return res.status(404).json({ message: "Order not found" });
-  res.json({ order });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    res.json({ order });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching order" });
+  }
 };
 
 // @desc    Update Order Status & Trigger Inventory
 const updateOrderStatus = async (req, res) => {
-  const { status, paymentStatus, paymentMode } = req.body;
-  const order = await Order.findOne({
-    _id: req.params.id,
-    restaurantId: req.user.restaurantId,
-  });
+  try {
+    const { status, paymentStatus, paymentMode } = req.body;
+    const order = await Order.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
 
-  if (!order) return res.status(404).json({ message: "Order not found" });
+    if (!order) return res.status(404).json({ message: "Order not found" });
 
-  const previousStatus = order.status;
-  if (status) order.status = status;
+    const previousStatus = order.status;
+    if (status) order.status = status;
 
-  // Auto-Deduct Inventory logic
-  if (status === "Preparing" && previousStatus !== "Preparing") {
-    await deductInventoryForOrder(order._id, req.user.restaurantId);
-  }
-
-  // Handle Payment & Freeing the Table
-  if (paymentStatus === "Paid") {
-    order.paymentStatus = "Paid";
-    order.paymentMode = paymentMode || order.paymentMode;
-
-    if (order.tableId) {
-      await Table.findByIdAndUpdate(order.tableId, {
-        status: "Available",
-        currentOrderId: null,
-      });
+    if (status === "Preparing" && previousStatus !== "Preparing") {
+      await deductInventoryForOrder(order._id, req.user.restaurantId);
     }
-  }
 
-  const updatedOrder = await order.save();
-  res.json(updatedOrder);
+    if (paymentStatus === "Paid") {
+      order.paymentStatus = "Paid";
+      order.paymentMode = paymentMode || order.paymentMode;
+
+      if (order.tableId) {
+        await Table.findByIdAndUpdate(order.tableId, {
+          status: "Available",
+          currentOrderId: null,
+        });
+      }
+    }
+
+    const updatedOrder = await order.save();
+    res.json(updatedOrder);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error updating status", error: error.message });
+  }
 };
 
-// @desc    Get Kitchen Orders (Lightning Fast now due to embedded items)
+// @desc    Get Kitchen Orders
 const getKitchenOrders = async (req, res) => {
   try {
     const activeOrders = await Order.find({
@@ -165,10 +169,7 @@ const getKitchenOrders = async (req, res) => {
   }
 };
 
-// @desc    Update Kitchen Order Status
-// @desc    Update Kitchen Order Status & Trigger Inventory
-// @route   PUT /api/orders/:id/kitchen-status
-// @access  Private (Owner, Manager, Kitchen)
+// @desc    Update Kitchen Order Status & Trigger Inventory Logic
 const updateKitchenStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -177,15 +178,11 @@ const updateKitchenStatus = async (req, res) => {
     const order = await Order.findOne({ _id: req.params.id, restaurantId });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // ==========================================
-    // THE INVENTORY ENGINE (Triggered when cooking starts)
-    // ==========================================
+    // Inventory Deduction Logic
     if (status === "Preparing" && order.status !== "Preparing") {
-      // 1. Calculate how much raw material this order needs
       const requiredMaterials = {};
 
       for (const item of order.items) {
-        // Find the recipe ingredients for this menu item
         const recipes = await Recipe.find({
           menuItemId: item.menuItemId,
           restaurantId,
@@ -201,19 +198,15 @@ const updateKitchenStatus = async (req, res) => {
         }
       }
 
-      // 2. Fetch the current stock levels from the fridge/pantry
       const inventoryItems = await Inventory.find({
         _id: { $in: Object.keys(requiredMaterials) },
         restaurantId,
       });
 
-      // 3. CHECK FOR ZERO STOCK (The Hard Stop)
+      // Check stock levels
       for (const invItem of inventoryItems) {
         const needed = requiredMaterials[invItem._id];
-
-        // 🚨 OUT OF STOCK CRISIS!
         if (invItem.quantity < needed) {
-          // Fire a Red Alert to the Manager's Bell Icon!
           await Notification.create({
             restaurantId,
             title: "CRITICAL: Out of Stock",
@@ -221,50 +214,42 @@ const updateKitchenStatus = async (req, res) => {
             type: "OutOfStock",
           });
 
-          // Block the Kitchen and trigger the Red Modal in KOTScreen.jsx
           return res.status(400).json({
             code: "OUT_OF_STOCK",
-            message: `Not enough ${invItem.name}. You need ${needed} ${invItem.unit}, but only have ${invItem.quantity} ${invItem.unit} left.`,
+            message: `Not enough ${invItem.name}. Need ${needed}, have ${invItem.quantity}.`,
           });
         }
       }
 
-      // 4. WE HAVE ENOUGH FOOD! Deduct the inventory.
+      // Deduct stock
       for (const invItem of inventoryItems) {
         const needed = requiredMaterials[invItem._id];
         invItem.quantity -= needed;
         await invItem.save();
 
-        // 🔥 FIX: Added fallback to 5! If minStockLevel is missing, it alerts when stock hits 5.
-        const minimumLevel = invItem.minStockLevel || 5; 
-
-        // ⚠️ LOW STOCK WARNING: Alert the Manager to buy more!
+        const minimumLevel = invItem.minStockLevel || 5;
         if (invItem.quantity <= minimumLevel && invItem.quantity > 0) {
-          
-          // Optional: Check if a low stock alert already exists today to prevent spamming
           const existingAlert = await Notification.findOne({
-             restaurantId,
-             type: "LowStock",
-             title: { $regex: invItem.name },
-             isRead: false
+            restaurantId,
+            type: "LowStock",
+            title: { $regex: invItem.name },
+            isRead: false,
           });
 
           if (!existingAlert) {
             await Notification.create({
               restaurantId,
               title: "Low Stock Alert",
-              message: `${invItem.name} is running low. Only ${invItem.quantity} ${invItem.unit} remaining.`,
-              type: "LowStock"
+              message: `${invItem.name} is running low.`,
+              type: "LowStock",
             });
           }
         }
+      }
     }
-  }
 
-    // 5. Update the actual order status
     order.status = status;
     await order.save();
-
     res.json({ message: `Order marked as ${status}`, order });
   } catch (error) {
     console.error("Kitchen Status Error:", error);
@@ -273,20 +258,16 @@ const updateKitchenStatus = async (req, res) => {
 };
 
 // @desc    Get the running (Unpaid) order for a specific table
-// @route   GET /api/orders/table/:tableId
-// @access  Private
 const getRunningOrderByTable = async (req, res) => {
   try {
     const order = await Order.findOne({
       tableId: req.params.tableId,
       restaurantId: req.user.restaurantId,
-      paymentStatus: "Unpaid", // Only look for running orders
+      paymentStatus: "Unpaid",
     });
 
     if (!order)
-      return res
-        .status(404)
-        .json({ message: "No running order found for this table" });
+      return res.status(404).json({ message: "No running order found" });
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: "Error fetching table order" });
@@ -294,8 +275,6 @@ const getRunningOrderByTable = async (req, res) => {
 };
 
 // @desc    Settle an Unpaid Order & Clear the Table
-// @route   PUT /api/orders/:id/settle
-// @access  Private (Cashier, Manager, Owner)
 const settleOrder = async (req, res) => {
   const { paymentMode, splitPayments, discount, tax, finalAmount } = req.body;
 
@@ -304,16 +283,15 @@ const settleOrder = async (req, res) => {
       _id: req.params.id,
       restaurantId: req.user.restaurantId,
     });
+
     if (!order) return res.status(404).json({ message: "Order not found" });
     if (order.paymentStatus === "Paid")
       return res.status(400).json({ message: "Order already paid" });
 
-    // Update the financials and mark as Paid
     order.paymentStatus = "Paid";
     order.paymentMode = paymentMode;
     order.splitPayments = paymentMode === "Split" ? splitPayments : [];
 
-    // Optional: Allow cashier to apply last-minute discounts
     if (discount !== undefined) {
       order.discount = discount;
       order.tax = tax;
@@ -322,9 +300,7 @@ const settleOrder = async (req, res) => {
 
     await order.save();
 
-    // 🔥 LOOPHOLE 1 COMPLETELY CLOSED: The software clears the table automatically
     if (order.tableId) {
-      const Table = require("../models/Table");
       await Table.findByIdAndUpdate(order.tableId, { status: "Available" });
     }
 
