@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react";
 import api from "../../lib/api";
 import toast, { Toaster } from "react-hot-toast";
-import { ChefHat, Clock, ArrowLeft, LogOut, AlertOctagon, X } from "lucide-react";
+import {
+  ChefHat,
+  Clock,
+  ArrowLeft,
+  LogOut,
+  AlertOctagon,
+  X,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../store/AuthContext";
 
@@ -9,7 +16,7 @@ const KOTScreen = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [orders, setOrders] = useState([]);
-  
+
   // 🔥 NEW: State for the Out-Of-Stock Kitchen Alarm
   const [stockAlert, setStockAlert] = useState(null);
 
@@ -37,12 +44,17 @@ const KOTScreen = () => {
       fetchKOTOrders();
     } catch (err) {
       // 🔥 THE SHIELD: If backend says Out of Stock, trigger the Red Modal!
-      if (err.response?.data?.code === 'OUT_OF_STOCK' || err.response?.status === 400) {
-         setStockAlert({
-           title: "INVENTORY DEPLETED",
-           message: err.response?.data?.message || "You do not have enough raw materials to prepare this order.",
-           orderId: orderId
-         });
+      if (
+        err.response?.data?.code === "OUT_OF_STOCK" ||
+        err.response?.status === 400
+      ) {
+        setStockAlert({
+          title: "INVENTORY DEPLETED",
+          message:
+            err.response?.data?.message ||
+            "You do not have enough raw materials to prepare this order.",
+          orderId: orderId,
+        });
       } else {
         toast.error(err.response?.data?.message || "Status update failed");
       }
@@ -78,11 +90,12 @@ const KOTScreen = () => {
               </button>
             )}
             <h1 className="text-xl md:text-3xl font-black text-white flex items-center gap-2 md:gap-3 tracking-tight">
-              <ChefHat className="text-blue-500 w-6 h-6 md:w-8 md:h-8" /> Kitchen Display
+              <ChefHat className="text-blue-500 w-6 h-6 md:w-8 md:h-8" />{" "}
+              Kitchen Display
             </h1>
           </div>
 
-          {(user?.role === "Kitchen") && (
+          {user?.role === "Kitchen" && (
             <button
               onClick={() => {
                 logout();
@@ -138,7 +151,10 @@ const KOTScreen = () => {
                   </p>
                 </div>
                 <span className="bg-slate-950 px-2 py-1 md:py-1.5 rounded-md border border-slate-700 text-[10px] md:text-xs font-bold text-slate-300 flex items-center gap-1.5 shadow-inner whitespace-nowrap">
-                  <Clock size={12} className="text-slate-500 md:w-[14px] md:h-[14px]" />{" "}
+                  <Clock
+                    size={12}
+                    className="text-slate-500 md:w-[14px] md:h-[14px]"
+                  />{" "}
                   {new Date(order.createdAt).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -149,7 +165,10 @@ const KOTScreen = () => {
               <div className="p-3 md:p-4 flex-1 max-h-48 md:max-h-60 overflow-y-auto custom-scrollbar">
                 <ul className="space-y-2 md:space-y-3">
                   {order.items?.map((item, idx) => (
-                    <li key={idx} className="flex justify-between items-start gap-2">
+                    <li
+                      key={idx}
+                      className="flex justify-between items-start gap-2"
+                    >
                       <span className="font-semibold text-slate-200 text-sm md:text-[15px] leading-tight">
                         {item.menuItemId?.name || item.name || "Unknown Item"}
                       </span>
@@ -196,8 +215,12 @@ const KOTScreen = () => {
             </h2>
             <p className="text-sm md:text-base text-slate-400 font-medium mb-6 md:mb-8">
               {stockAlert.message}
-              <br /><br />
-              <span className="text-yellow-500 font-bold">Please inform the Manager immediately to cancel or modify this order.</span>
+              <br />
+              <br />
+              <span className="text-yellow-500 font-bold">
+                Please inform the Manager immediately to cancel or modify this
+                order.
+              </span>
             </p>
             <button
               onClick={() => setStockAlert(null)}
@@ -208,7 +231,6 @@ const KOTScreen = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

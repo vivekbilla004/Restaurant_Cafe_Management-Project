@@ -260,14 +260,16 @@ const updateKitchenStatus = async (req, res) => {
 // @desc    Get the running (Unpaid) order for a specific table
 const getRunningOrderByTable = async (req, res) => {
   try {
+    // 🔥 THE FIX: Fetch the order even if it's "Paid", as long as the guests haven't left (Completed)
     const order = await Order.findOne({
       tableId: req.params.tableId,
       restaurantId: req.user.restaurantId,
-      paymentStatus: "Unpaid",
-    });
+      status: { $nin: ["Completed", "Cancelled"] },
+    }).populate("items.menuItemId");
 
     if (!order)
       return res.status(404).json({ message: "No running order found" });
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: "Error fetching table order" });
@@ -285,12 +287,22 @@ const settleOrder = async (req, res) => {
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
-    if (order.paymentStatus === "Paid")
-      return res.status(400).json({ message: "Order already paid" });
 
+    // 🔥 THE FIX: If the order is already Paid upfront, just clear the table and mark as Completed.
+    if (order.paymentStatus === "Paid") {
+      if (order.tableId) {
+        await Table.findByIdAndUpdate(order.tableId, { status: "Available" });
+      }
+      order.status = "Completed";
+      await order.save();
+      return res.json({ message: "Table Cleared (Already Paid)", order });
+    }
+
+    // Normal Settlement Flow
     order.paymentStatus = "Paid";
     order.paymentMode = paymentMode;
     order.splitPayments = paymentMode === "Split" ? splitPayments : [];
+    order.status = "Completed"; // Mark as completed so it leaves the active table queue
 
     if (discount !== undefined) {
       order.discount = discount;
