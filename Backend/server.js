@@ -29,7 +29,8 @@ const app = express();
 app.use(cors({ origin: "*" }));
 // app.use(cors());
 // Allows your React frontend to communicate with this API
-app.use(express.json()); // Allows us to accept JSON data in the body
+app.use(express.json({ limit: "10mb" })); // Allows us to accept JSON data in the body
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 // Mount Routes
 app.use("/api/users", userRoutes);
